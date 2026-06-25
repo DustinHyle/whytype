@@ -32,33 +32,37 @@ Platform-appropriate defaults (all customizable in Settings):
 
 ## Quick Start
 
+> For full step-by-step instructions see the **[Install Guide](INSTALL.md)**.
+> Download builds from the
+> [Releases page](https://github.com/DustinHyle/whytype/releases/latest).
+
 ### Windows
 
-1. Unzip the distribution archive
-2. Double-click **`install.bat`**
-3. The installer will check for Python, install it if missing, set up the app in `%LOCALAPPDATA%\Programs\WhyType`, and create Start Menu and desktop shortcuts
+1. Download **`whytype-windows.zip`**, right-click → **Extract All**.
+2. Double-click **`install.bat`**.
+3. **Security approval:** if a blue **"Windows protected your PC"** (SmartScreen) box appears, click **More info → Run anyway** (the app isn't from the Microsoft Store, so this is expected).
+4. Launch **Why Type** from the Start Menu.
 
 To uninstall, run `%LOCALAPPDATA%\Programs\WhyType\uninstall.bat` or use **Add/Remove Programs**.
 
-### macOS
+### macOS (drag and drop)
 
-```bash
-chmod +x install.sh
-./install.sh
-```
+1. Download **`whytype-macos-standalone.zip`** and double-click to unzip — you'll get **Why Type**.
+2. Drag **Why Type** into your **Applications** folder.
+3. **Security approvals** (one-time — the app isn't notarized yet):
+   - **Gatekeeper:** the first launch must be **right-click (Control-click) → Open → Open**. Double-clicking the first time will be blocked.
+   - **Microphone:** allow it when prompted (needed to hear your speech).
+   - **Accessibility:** macOS will prompt to open **System Settings → Privacy & Security → Accessibility** — turn **Why Type** on. This is required for the app to type for you. **Quit and reopen** Why Type after enabling it.
 
-The installer will set up the app in `~/Applications/Why Type.app` (or `/Applications/Why Type.app` if you choose system-wide).
-
-To uninstall, run the `uninstall.sh` inside the app bundle or delete the `.app`.
+To uninstall, drag **Why Type** from Applications to the Trash.
 
 ### Linux
 
-```bash
-chmod +x install.sh
-./install.sh
-```
-
-The installer will set up the app in `~/.local/share/whytype` and create a desktop entry.
+1. Download **`whytype-linux.zip`**, extract it, and run:
+   ```bash
+   ./install.sh
+   ```
+2. The installer sets up the app in `~/.local/share/whytype` and creates a desktop entry. (No special OS security prompt; you may be asked to install PortAudio/Vulkan drivers — see the Install Guide.)
 
 To uninstall, run `~/.local/share/whytype/uninstall.sh`.
 
