@@ -10,6 +10,7 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false   # one platform failing must not cancel the others
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
@@ -28,7 +29,11 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
+          # Vulkan backend needs the loader/headers, glslc, and SPIRV/glslang
+          # headers. Optional extras use '|| true' so a missing package name
+          # never fails the job (the engine build falls back to CPU anyway).
           sudo apt-get install -y libportaudio2 cmake libvulkan-dev glslc spirv-tools
+          sudo apt-get install -y glslang-tools spirv-headers || true
 
       - name: Install system deps (macOS)
         if: runner.os == 'macOS'

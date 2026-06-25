@@ -65,16 +65,35 @@ def main() -> None:
         run(["git", "clone", "--depth", "1", "--branch", args.ref, REPO, src])
 
         build = os.path.join(src, "build")
-        run([
-            "cmake", "-B", build,
-            "-DCMAKE_BUILD_TYPE=Release",
-            "-DBUILD_SHARED_LIBS=OFF",
-            "-DWHISPER_BUILD_TESTS=OFF",
-            "-DWHISPER_BUILD_EXAMPLES=ON",
-            *BACKEND_FLAGS[backend],
-        ], cwd=src)
-        run(["cmake", "--build", build, "--config", "Release",
-             "-j", args.jobs, "--target", "whisper-cli"], cwd=src)
+
+        def configure_and_build(bk: str) -> None:
+            if os.path.isdir(build):
+                shutil.rmtree(build)
+            run([
+                "cmake", "-B", build,
+                "-DCMAKE_BUILD_TYPE=Release",
+                "-DBUILD_SHARED_LIBS=OFF",
+                "-DWHISPER_BUILD_TESTS=OFF",
+                "-DWHISPER_BUILD_EXAMPLES=ON",
+                *BACKEND_FLAGS[bk],
+            ], cwd=src)
+            run(["cmake", "--build", build, "--config", "Release",
+                 "-j", args.jobs, "--target", "whisper-cli"], cwd=src)
+
+        try:
+            configure_and_build(backend)
+        except subprocess.CalledProcessError:
+            # GPU backends need extra SDKs (Vulkan/SPIRV headers, etc.) that may
+            # be missing; never fail the whole build — fall back to a CPU binary
+            # so a working engine always ships. (The app also falls back to CPU
+            # at runtime if a GPU is unusable.)
+            if backend != "cpu":
+                print(f"WARNING: '{backend}' backend build failed; "
+                      f"falling back to a CPU-only engine.")
+                backend = "cpu"
+                configure_and_build("cpu")
+            else:
+                raise
 
         exe = "whisper-cli.exe" if sys.platform == "win32" else "whisper-cli"
         found = None

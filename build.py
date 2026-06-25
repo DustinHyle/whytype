@@ -13,7 +13,57 @@ import shutil
 import subprocess
 
 APP_NAME = "WhyType"
+DISPLAY_NAME = "Why Type"
+BUNDLE_ID = "com.whytype.app"
 ENTRY_POINT = "whytype/__main__.py"
+
+
+def _read_version() -> str:
+    import re
+    text = open("whytype/__init__.py", encoding="utf-8").read()
+    m = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', text)
+    return m.group(1) if m else "0.0.0"
+
+
+def _post_process_macos_app() -> None:
+    """Make the PyInstaller .app a proper macOS app: menu-bar agent, mic
+    permission string, display name, and an ad-hoc signature so it launches.
+    """
+    import plistlib
+
+    app = f"dist/{APP_NAME}.app"
+    plist_path = os.path.join(app, "Contents", "Info.plist")
+    if not os.path.exists(plist_path):
+        print(f"WARNING: {plist_path} not found; skipping Info.plist patch.")
+        return
+
+    with open(plist_path, "rb") as f:
+        info = plistlib.load(f)
+    info["CFBundleName"] = DISPLAY_NAME
+    info["CFBundleDisplayName"] = DISPLAY_NAME
+    info["CFBundleIdentifier"] = BUNDLE_ID
+    info["CFBundleShortVersionString"] = _read_version()
+    info["CFBundleVersion"] = _read_version()
+    # Menu-bar / status-item app: no Dock icon.
+    info["LSUIElement"] = True
+    # Required on modern macOS or the app is killed on mic access.
+    info["NSMicrophoneUsageDescription"] = (
+        "Why Type needs microphone access to transcribe your speech into text."
+    )
+    with open(plist_path, "wb") as f:
+        plistlib.dump(info, f)
+    print("Patched Info.plist (LSUIElement, mic permission, display name).")
+
+    # Ad-hoc code signature — required for a downloaded unsigned app to launch
+    # on Apple Silicon (hardened runtime). Not notarized; users still right-
+    # click → Open the first time.
+    try:
+        subprocess.check_call(
+            ["codesign", "--force", "--deep", "--sign", "-", app]
+        )
+        print("Ad-hoc signed the app bundle.")
+    except Exception as e:  # codesign missing or failed — non-fatal
+        print(f"WARNING: ad-hoc codesign failed ({e}); app may need manual Gatekeeper approval.")
 
 
 def clean() -> None:
@@ -56,6 +106,8 @@ def build(onefile: bool = False) -> None:
         "--noconfirm",
         "--clean",
         "--windowed",
+        "--osx-bundle-identifier",
+        BUNDLE_ID,
         mode_flag,
         # Include all package data to avoid missing files at runtime
         "--collect-all",
@@ -78,6 +130,9 @@ def build(onefile: bool = False) -> None:
     print(" ".join(cmd))
     print("")
     subprocess.check_call(cmd)
+
+    if sys.platform == "darwin" and not onefile:
+        _post_process_macos_app()
 
     print("")
     if onefile:
