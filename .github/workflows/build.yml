@@ -1,0 +1,98 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # --- Build-time deps for compiling whisper.cpp with a GPU backend ---
+      # Linux: Vulkan headers + glslc shader compiler + audio runtime.
+      - name: Install system deps (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libportaudio2 cmake libvulkan-dev glslc spirv-tools
+
+      - name: Install system deps (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install portaudio cmake
+          # Metal ships with Xcode; no SDK install needed.
+
+      # Windows: Vulkan SDK (headers + glslc) from LunarG, installed silently.
+      - name: Install Vulkan SDK (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          curl -L -o vulkan-sdk.exe https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe
+          ./vulkan-sdk.exe --accept-licenses --default-answer --confirm-command install
+          $sdk = (Get-ChildItem 'C:\VulkanSDK' | Sort-Object Name -Descending | Select-Object -First 1).FullName
+          echo "VULKAN_SDK=$sdk" >> $env:GITHUB_ENV
+          echo "$sdk\Bin" >> $env:GITHUB_PATH
+
+      - name: Build whisper.cpp binary (GPU backend)
+        run: |
+          python -m pip install --upgrade pip
+          pip install cmake
+          # backend auto = Vulkan on Linux/Windows (any GPU), Metal on macOS.
+          # Pin --ref to a tag for reproducible release builds.
+          python scripts/build_whispercpp.py --backend auto
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build
+        run: python build.py
+
+      # Versioned, platform-tagged artifacts: whytype-<version>-<os>.zip
+      # (installer bundle) and ...-standalone.zip (no Python required).
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          python scripts/package.py --platform windows
+          python scripts/package.py --platform windows --standalone-dir dist/WhyType
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          python scripts/package.py --platform macos
+          python scripts/package.py --platform macos --standalone-dir dist/WhyType.app
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          python scripts/package.py --platform linux
+          python scripts/package.py --platform linux --standalone-dir dist/WhyType
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: whytype-${{ runner.os }}
+          path: dist/whytype-*.zip
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/whytype-*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

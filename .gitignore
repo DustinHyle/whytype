@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Build output
+build/
+dist/
+*.spec.bak
+
+# Native engine binary — built per-platform by scripts/build_whispercpp.py
+# (CI stages this into the per-OS release; it is not source).
+whytype/bin/
+
+# Distribution archive
+whytype.zip

@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "whytype"
+version = "1.1.11"
+description = "Voice dictation with local AI"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+dependencies = [
+    "PySide6>=6.5.0",
+    "pynput>=1.7.6",
+    "sounddevice>=0.4.6",
+    "numpy>=1.24.0",
+    "platformdirs>=3.0.0",
+    # macOS only: HIServices (Accessibility permission check for keystroke
+    # injection). 8.5+ fixed AXIsProcessTrustedWithOptions metadata.
+    "pyobjc-framework-ApplicationServices>=8.5; sys_platform == 'darwin'",
+]
+
+[project.scripts]
+whytype = "whytype.app:main"
+
+[project.optional-dependencies]
+build = ["pyinstaller>=6.0.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["whytype"]
+# The whisper-cli binary lives in whytype/bin/ and is .gitignored (a per-platform
+# build artifact). Force-include it so `pip install .` on a built tree ships it.
+artifacts = ["whytype/bin/*"]
