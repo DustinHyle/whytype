@@ -167,8 +167,8 @@ _PYSIDE6_ERROR: Optional[str] = None
 _QT_CLASSES = {}
 try:
     from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QMessageBox, QDialog
-    from PySide6.QtGui import QIcon, QAction, QCursor
-    from PySide6.QtCore import QObject, Signal
+    from PySide6.QtGui import QIcon, QAction, QCursor, QPixmap
+    from PySide6.QtCore import QObject, Signal, Qt, QTimer
     _QT_CLASSES["QApplication"] = QApplication
     _QT_CLASSES["QSystemTrayIcon"] = QSystemTrayIcon
     _QT_CLASSES["QMenu"] = QMenu
@@ -177,8 +177,11 @@ try:
     _QT_CLASSES["QIcon"] = QIcon
     _QT_CLASSES["QAction"] = QAction
     _QT_CLASSES["QCursor"] = QCursor
+    _QT_CLASSES["QPixmap"] = QPixmap
     _QT_CLASSES["QObject"] = QObject
     _QT_CLASSES["Signal"] = Signal
+    _QT_CLASSES["Qt"] = Qt
+    _QT_CLASSES["QTimer"] = QTimer
 except Exception as exc:
     _PYSIDE6_ERROR = str(exc)
     logger.exception("PySide6 import failed")
@@ -500,13 +503,39 @@ class WhyTypeApp:
             )
         return icon
 
+    def _tray_qicon(self):
+        """Build a QIcon with menu-bar-sized pixmaps.
+
+        The bundled icon.png is 256x256. QSystemTrayIcon does not reliably
+        downscale one large pixmap to menu-bar size on macOS (it renders far
+        too large and clips to invisibility, or doesn't show at all). Adding
+        explicitly scaled pixmaps (22/44/88) gives Qt the resolutions the menu
+        bar picks at 1x / 2x / 3x.
+        """
+        QIcon = _QT_CLASSES["QIcon"]
+        QPixmap = _QT_CLASSES["QPixmap"]
+        Qt = _QT_CLASSES["Qt"]
+        path = _icon_path()
+        if not path:
+            return self._app_icon()
+        base = QPixmap(path)
+        if base.isNull():
+            return self._app_icon()
+        icon = QIcon()
+        for size in (22, 44, 88):
+            icon.addPixmap(base.scaled(
+                size, size,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            ))
+        return icon
+
     def _build_tray(self) -> None:
         QSystemTrayIcon = _QT_CLASSES["QSystemTrayIcon"]
         QAction = _QT_CLASSES["QAction"]
 
         self.tray_icon = QSystemTrayIcon(self.app)
-        icon = self._app_icon()
-        self.tray_icon.setIcon(icon)
+        self.tray_icon.setIcon(self._tray_qicon())
         self.tray_icon.setToolTip("Why Type")
 
         # Build menu explicitly and keep strong references to EVERYTHING
@@ -528,6 +557,16 @@ class WhyTypeApp:
         # Instead handle activation manually and popup the menu ourselves.
         self.tray_icon.activated.connect(self._tray_activated)
         self.tray_icon.show()
+
+        # Diagnostic: a geometry of (0, <screen_height>, 38, 0) means the icon
+        # was created but never placed in the menu bar (the macOS LaunchServices
+        # bundle-identity bug). A real rect means it's visible.
+        logger.info(
+            "Tray icon: available=%s visible=%s geometry=%s",
+            QSystemTrayIcon.isSystemTrayAvailable(),
+            self.tray_icon.isVisible(),
+            self.tray_icon.geometry(),
+        )
 
         # Show a startup notification so the user knows the app is running
         if self.tray_icon.supportsMessages():

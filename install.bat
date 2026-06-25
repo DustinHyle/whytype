@@ -312,7 +312,7 @@ copy /Y "%SOURCE_DIR%\uninstall.bat" "%INSTALL_DIR%\uninstall.bat" >nul 2>&1
 echo Registering installation...
 reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /f >nul 2>&1
 reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /v DisplayName /d "Why Type" /f >nul 2>&1
-reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /v DisplayVersion /d "1.1.13" /f >nul 2>&1
+reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /v DisplayVersion /d "1.1.14" /f >nul 2>&1
 reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /v Publisher /d "WhyType" /f >nul 2>&1
 reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /v InstallLocation /d "%INSTALL_DIR%" /f >nul 2>&1
 reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /v UninstallString /d "\"%INSTALL_DIR%\uninstall.bat\"" /f >nul 2>&1

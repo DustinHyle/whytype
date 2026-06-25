@@ -1,5 +1,12 @@
 # Why Type Changelog
 
+## v1.1.14 - macOS Menu-Bar Icon Rendering
+
+### Fixed
+- **macOS menu-bar (tray) icon** now uses explicitly scaled 22/44/88 px pixmaps. The bundled 256×256 icon wasn't reliably downscaled by Qt for the menu bar (rendering as an oversized/invisible blob). Added tray geometry logging to diagnose placement.
+
+> Note: the macOS app is fully self-contained (PyInstaller bundles Python and all dependencies — no Homebrew or system Python needed). If you previously installed an older build, **delete the old "Why Type"/"WhyType" from Applications first**, then install this one — otherwise the stale app launches and crashes.
+
 ## v1.1.13 - One Download Per Platform, macOS App Crash Fix
 
 ### Fixed

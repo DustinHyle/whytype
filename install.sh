@@ -293,9 +293,9 @@ if [ "$OS" == "macos" ]; then
     <key>CFBundleIdentifier</key>
     <string>com.whytype.app</string>
     <key>CFBundleVersion</key>
-    <string>1.1.13</string>
+    <string>1.1.14</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1.13</string>
+    <string>1.1.14</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
