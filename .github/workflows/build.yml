@@ -94,12 +94,25 @@ jobs:
           name: whytype-${{ runner.os }}
           path: dist/whytype-*.zip
 
-      - name: Release
-        if: startsWith(github.ref, 'refs/tags/')
+  # Publish a public GitHub Release once, after all platforms build. Runs only
+  # for version tags. Needs contents:write to create the release.
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/whytype-*.zip
-          generate_release_notes: true
+          files: artifacts/**/whytype-*.zip
+          fail_on_unmatched_files: true
           body: |
             ## Why Type ${{ github.ref_name }}
 
@@ -111,5 +124,3 @@ jobs:
             - **Linux:** `whytype-*-linux.zip` — extract, run `./install.sh`
 
             See the [Install Guide](https://github.com/DustinHyle/whytype/blob/main/INSTALL.md) for step-by-step instructions.
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
