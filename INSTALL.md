@@ -37,9 +37,17 @@ Settings.
    download **`whytype-macos-standalone.zip`**.
 2. Double-click the downloaded file to unzip it. You'll get **Why Type**.
 3. Drag **Why Type** into your **Applications** folder.
-4. **The first time only:** right-click (or Control-click) **Why Type** in
-   Applications and choose **Open**, then click **Open** in the dialog. (This
-   one-time step is needed because the app isn't from the Mac App Store.)
+4. **The first time only — approve it in Settings** (the app isn't from the
+   Mac App Store yet, so macOS blocks it once):
+   - Double-click **Why Type**. macOS says it "could not verify" the app —
+     click **Done** (⚠️ **not** "Move to Trash").
+   - Open **System Settings → Privacy & Security**, scroll to **Security**, and
+     click **Open Anyway** next to the Why Type message. Confirm with Touch ID
+     or your password.
+   - On older macOS (Ventura/Sonoma) you can instead **right-click → Open →
+     Open**.
+   - *(Power-user shortcut: `xattr -dr com.apple.quarantine "/path/to/Why Type.app"`
+     in Terminal, then open normally.)*
 5. When you first use it, macOS will ask for **Microphone** and
    **Accessibility** permission — click **Allow / Open System Settings** and
    turn **Why Type** on. Accessibility is required for the app to type for you.
