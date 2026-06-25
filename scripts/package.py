@@ -100,11 +100,15 @@ def build_bundle(platform: str, version: str) -> str:
     return out
 
 
-def build_standalone(src_dir: str, platform: str, version: str) -> str:
+def build_standalone(src_dir: str, platform: str, version: str,
+                     primary: bool = False) -> str:
     if not os.path.isdir(src_dir):
         raise SystemExit(f"Standalone dir not found: {src_dir}")
     os.makedirs(DIST, exist_ok=True)
-    out = os.path.join(DIST, f"whytype-{version}-{platform}-standalone.zip")
+    # ``primary`` drops the "-standalone" suffix so this is the single download
+    # for the platform (e.g. the macOS .app).
+    suffix = "" if primary else "-standalone"
+    out = os.path.join(DIST, f"whytype-{version}-{platform}{suffix}.zip")
     if os.path.exists(out):
         os.remove(out)
     parent = os.path.dirname(os.path.abspath(src_dir))
@@ -122,11 +126,15 @@ def main() -> None:
                     default=host_platform())
     ap.add_argument("--standalone-dir", default=None,
                     help="Zip this PyInstaller output folder instead of the bundle.")
+    ap.add_argument("--primary", action="store_true",
+                    help="Name the standalone as the platform's main download "
+                         "(no '-standalone' suffix).")
     args = ap.parse_args()
     version = get_version()
 
     if args.standalone_dir:
-        out = build_standalone(args.standalone_dir, args.platform, version)
+        out = build_standalone(args.standalone_dir, args.platform, version,
+                               primary=args.primary)
     else:
         out = build_bundle(args.platform, version)
         bindir = os.path.join(ROOT, "whytype", "bin")

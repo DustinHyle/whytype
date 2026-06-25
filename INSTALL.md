@@ -34,7 +34,7 @@ Settings.
 ## 🍎 Mac
 
 1. On the [Releases page](https://github.com/DustinHyle/whytype/releases/latest),
-   download **`whytype-macos-standalone.zip`**.
+   download **`whytype-macos.zip`**.
 2. Double-click the downloaded file to unzip it. You'll get **Why Type**.
 3. Drag **Why Type** into your **Applications** folder.
 4. **The first time only — approve it in Settings** (the app isn't from the

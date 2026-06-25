@@ -1,5 +1,13 @@
 # Why Type Changelog
 
+## v1.1.13 - One Download Per Platform, macOS App Crash Fix
+
+### Fixed
+- **macOS app crashed on launch** with `No module named '_struct'`: the CI built the PyInstaller app with a relocatable Python (`actions/setup-python`) whose C extensions PyInstaller couldn't bundle. The macOS app is now built with Homebrew's framework Python.
+
+### Changed
+- **One download per platform.** Releases now have exactly `whytype-<ver>-windows.zip`, `whytype-<ver>-macos.zip`, and `whytype-<ver>-linux.zip` — no more confusing "standalone" duplicates. (Mac = the drag-install `.app`; Windows/Linux = the installer.)
+
 ## v1.1.12 - Public Release, Install Guide, Default Model
 
 ### Changed

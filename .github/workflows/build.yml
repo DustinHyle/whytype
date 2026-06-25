@@ -60,33 +60,44 @@ jobs:
           # Pin --ref to a tag for reproducible release builds.
           python scripts/build_whispercpp.py --backend auto
 
+      # Windows/Linux: build with the runner's Python (used for the installer
+      # bundle's reference only — the bundle ships source + the native engine).
       - name: Install Python dependencies
+        if: runner.os != 'macOS'
         run: |
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Build
+      # macOS: PyInstaller must use a NON-relocatable Python or the bundled app
+      # crashes with "No module named '_struct'". actions/setup-python ships a
+      # relocatable build, so use Homebrew's framework Python instead.
+      - name: Build macOS app (Homebrew Python)
+        if: runner.os == 'macOS'
+        run: |
+          brew install python@3.12
+          python3.12 -m venv buildenv
+          source buildenv/bin/activate
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+          python build.py
+
+      - name: Build (Windows/Linux)
+        if: runner.os != 'macOS'
         run: python build.py
 
-      # Versioned, platform-tagged artifacts: whytype-<version>-<os>.zip
-      # (installer bundle) and ...-standalone.zip (no Python required).
+      # One download per platform: Windows/Linux = installer bundle;
+      # macOS = the self-contained .app (named without a "-standalone" suffix).
       - name: Package (Windows)
         if: runner.os == 'Windows'
-        run: |
-          python scripts/package.py --platform windows
-          python scripts/package.py --platform windows --standalone-dir dist/WhyType
+        run: python scripts/package.py --platform windows
 
       - name: Package (macOS)
         if: runner.os == 'macOS'
-        run: |
-          python scripts/package.py --platform macos
-          python scripts/package.py --platform macos --standalone-dir dist/WhyType.app
+        run: python scripts/package.py --platform macos --standalone-dir dist/WhyType.app --primary
 
       - name: Package (Linux)
         if: runner.os == 'Linux'
-        run: |
-          python scripts/package.py --platform linux
-          python scripts/package.py --platform linux --standalone-dir dist/WhyType
+        run: python scripts/package.py --platform linux
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -120,7 +131,7 @@ jobs:
 
             ### Download (no account needed)
             - **Windows:** `whytype-*-windows.zip` — extract, run `install.bat`
-            - **Mac:** `whytype-*-macos-standalone.zip` — unzip, drag **Why Type** to Applications, right-click → Open the first time
+            - **Mac:** `whytype-*-macos.zip` — unzip, drag **Why Type** to Applications. First launch: if macOS says it "can't be verified," click **Done**, then **System Settings → Privacy & Security → Open Anyway**.
             - **Linux:** `whytype-*-linux.zip` — extract, run `./install.sh`
 
             See the [Install Guide](https://github.com/DustinHyle/whytype/blob/main/INSTALL.md) for step-by-step instructions.

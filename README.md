@@ -47,7 +47,7 @@ To uninstall, run `%LOCALAPPDATA%\Programs\WhyType\uninstall.bat` or use **Add/R
 
 ### macOS (drag and drop)
 
-1. Download **`whytype-macos-standalone.zip`** and double-click to unzip — you'll get **Why Type**.
+1. Download **`whytype-macos.zip`** and double-click to unzip — you'll get **Why Type**.
 2. Drag **Why Type** into your **Applications** folder.
 3. **Security approvals** (one-time — the app isn't notarized yet):
    - **Gatekeeper (macOS Sequoia 15+):** double-click **Why Type**, click **Done** on the "could not verify" dialog (**not** "Move to Trash"), then go to **System Settings → Privacy & Security → Open Anyway**. On older macOS you can instead **right-click → Open → Open**.
