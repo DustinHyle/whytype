@@ -1,5 +1,14 @@
 # Why Type Changelog
 
+## v1.1.12 - Public Release, Install Guide, Default Model
+
+### Changed
+- The installer now defaults to the **Small** model (press Enter to accept) — a good speed/accuracy balance for most users.
+
+### Added
+- Step-by-step **[Install Guide](INSTALL.md)** for non-technical users (Windows, Mac, Linux), linked from the README and release notes.
+- Tagged releases now publish downloadable per-OS builds to a public GitHub Releases page (no sign-in needed to download).
+
 ## v1.1.11 - macOS App Name
 
 ### Fixed

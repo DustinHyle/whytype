@@ -219,13 +219,15 @@ echo No transcription model is installed yet.
 echo.
 echo 1) Tiny    - Fastest, basic accuracy      (~75 MB)
 echo 2) Base    - Fast, good balance            (~142 MB)
-echo 3) Small   - Moderate, better accents      (~466 MB)
+echo 3) Small   - Moderate, better accents      (~466 MB)  [recommended]
 echo 4) Medium  - Slow, high accuracy           (~1.5 GB)
 echo 5) Large   - Slowest, maximum accuracy     (~3.1 GB)
 echo 6) Skip    - Download later from Settings
 echo ========================================
-set /p MODEL_CHOICE="Choose a model to download [1-6]: "
+set /p MODEL_CHOICE="Choose a model to download [1-6, default 3]: "
 
+:: Default to Small (the recommended balance) when the user just presses Enter.
+if "%MODEL_CHOICE%"=="" set "MODEL_NAME=small" & goto :download
 if "%MODEL_CHOICE%"=="1" set "MODEL_NAME=tiny" & goto :download
 if "%MODEL_CHOICE%"=="2" set "MODEL_NAME=base" & goto :download
 if "%MODEL_CHOICE%"=="3" set "MODEL_NAME=small" & goto :download
@@ -310,7 +312,7 @@ copy /Y "%SOURCE_DIR%\uninstall.bat" "%INSTALL_DIR%\uninstall.bat" >nul 2>&1
 echo Registering installation...
 reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /f >nul 2>&1
 reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /v DisplayName /d "Why Type" /f >nul 2>&1
-reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /v DisplayVersion /d "1.1.11" /f >nul 2>&1
+reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /v DisplayVersion /d "1.1.12" /f >nul 2>&1
 reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /v Publisher /d "WhyType" /f >nul 2>&1
 reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /v InstallLocation /d "%INSTALL_DIR%" /f >nul 2>&1
 reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /v UninstallString /d "\"%INSTALL_DIR%\uninstall.bat\"" /f >nul 2>&1

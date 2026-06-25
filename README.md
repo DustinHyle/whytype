@@ -2,6 +2,12 @@
 
 Cross-platform voice dictation app that transcribes speech locally with whisper.cpp and types it into the active text field.
 
+## ⬇️ Download & Install
+
+**[Download the latest version →](https://github.com/DustinHyle/whytype/releases/latest)**
+then follow the simple step-by-step **[Install Guide](INSTALL.md)** for Windows,
+Mac, or Linux. No account or sign-in required.
+
 ## Features
 
 - **Local transcription** — runs Whisper (via whisper.cpp) entirely on your machine (no cloud required)

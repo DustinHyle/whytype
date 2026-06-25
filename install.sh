@@ -242,20 +242,22 @@ echo "No transcription model is installed yet."
 echo ""
 echo "1) Tiny    - Fastest, basic accuracy      (~75 MB)"
 echo "2) Base    - Fast, good balance            (~142 MB)"
-echo "3) Small   - Moderate, better accents      (~466 MB)"
+echo "3) Small   - Moderate, better accents      (~466 MB)  [recommended]"
 echo "4) Medium  - Slow, high accuracy           (~1.5 GB)"
 echo "5) Large   - Slowest, maximum accuracy     (~3.1 GB)"
 echo "6) Skip    - Download later from Settings"
 echo "========================================"
-read -p "Choose a model to download [1-6]: " model_choice
+read -p "Choose a model to download [1-6, default 3]: " model_choice
 
+# Default to Small (the recommended balance) when the user just presses Enter.
 case $model_choice in
     1) MODEL_NAME="tiny" ;;
     2) MODEL_NAME="base" ;;
-    3) MODEL_NAME="small" ;;
+    3|"") MODEL_NAME="small" ;;
     4) MODEL_NAME="medium" ;;
     5) MODEL_NAME="large-v3" ;;
-    *) MODEL_NAME="" ;;
+    6) MODEL_NAME="" ;;
+    *) MODEL_NAME="small" ;;
 esac
 
 if [ -n "$MODEL_NAME" ]; then
@@ -291,9 +293,9 @@ if [ "$OS" == "macos" ]; then
     <key>CFBundleIdentifier</key>
     <string>com.whytype.app</string>
     <key>CFBundleVersion</key>
-    <string>1.1.11</string>
+    <string>1.1.12</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1.11</string>
+    <string>1.1.12</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
