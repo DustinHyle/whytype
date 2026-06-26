@@ -14,17 +14,43 @@ import subprocess
 APP_NAME = "WhyType"
 
 
-def _codesign_macos_app() -> None:
-    """Ad-hoc sign the .app so it launches on Apple Silicon (hardened runtime).
+def _fix_macos_libdynload(app: str) -> None:
+    """Copy stdlib C extensions to the bundle root so the app launches.
 
-    The Info.plist (LSUIElement, mic permission, names) is set by the spec's
-    BUNDLE() step, so it doesn't need patching here. Not notarized; users still
-    approve it once via System Settings → Privacy & Security.
+    PyInstaller 6.x places stdlib C extensions under
+    Contents/Frameworks/<pyname>/lib-dynload/, which is NOT searched during the
+    bootloader's early bootstrap — so the app crashes with "No module named
+    '_struct'". Setting them as binaries in the spec doesn't help because
+    PyInstaller relocates Python extensions back to lib-dynload. So copy them
+    up to Contents/Frameworks/ (the _MEIPASS root) directly. Version-agnostic:
+    we glob whatever lib-dynload directory exists.
+    """
+    import glob
+    frameworks = os.path.join(app, "Contents", "Frameworks")
+    dynload_dirs = glob.glob(os.path.join(frameworks, "*", "lib-dynload"))
+    if not dynload_dirs:
+        print("WARNING: no lib-dynload directory found; cannot apply _struct fix.")
+        return
+    copied = 0
+    for d in dynload_dirs:
+        for so in glob.glob(os.path.join(d, "*.so")):
+            dest = os.path.join(frameworks, os.path.basename(so))
+            if not os.path.exists(dest):
+                shutil.copy2(so, dest)
+                copied += 1
+    print(f"Copied {copied} stdlib C extensions to the bundle root (lib-dynload fix).")
+
+
+def _post_process_macos_app() -> None:
+    """Apply the lib-dynload fix, then ad-hoc sign so it launches on Apple
+    Silicon. The Info.plist is set by the spec's BUNDLE() step.
     """
     app = f"dist/{APP_NAME}.app"
     if not os.path.isdir(app):
-        print(f"WARNING: {app} not found; skipping codesign.")
+        print(f"WARNING: {app} not found; skipping macOS post-processing.")
         return
+    _fix_macos_libdynload(app)
+    # Sign AFTER copying files in, or the signature is invalidated.
     try:
         subprocess.check_call(["codesign", "--force", "--deep", "--sign", "-", app])
         print("Ad-hoc signed the app bundle.")
@@ -61,7 +87,7 @@ def build() -> None:
     subprocess.check_call(cmd)
 
     if sys.platform == "darwin":
-        _codesign_macos_app()
+        _post_process_macos_app()
 
     print("")
     if sys.platform == "win32":

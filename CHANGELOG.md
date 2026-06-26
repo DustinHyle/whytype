@@ -1,5 +1,10 @@
 # Why Type Changelog
 
+## v1.1.16 - macOS _struct Fix (Deterministic)
+
+### Fixed
+- The macOS `_struct` launch crash fix now works reliably: PyInstaller relocates Python C extensions back into `lib-dynload/` regardless of spec settings, so the build now **copies them to the bundle root as a post-build step** (then re-signs). Verified in the published artifact.
+
 ## v1.1.15 - macOS App Launch Crash, Real Fix
 
 ### Fixed
