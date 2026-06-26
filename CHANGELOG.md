@@ -1,5 +1,11 @@
 # Why Type Changelog
 
+## v1.1.15 - macOS App Launch Crash, Real Fix
+
+### Fixed
+- **macOS app crashed on launch with `No module named '_struct'`** — the real cause: PyInstaller 6.x places the stdlib C extensions under `<pyname>/lib-dynload/`, which isn't on the bootstrap search path, so `_struct`/`zlib`/etc. fail to import. The build now also copies those extensions to the bundle root so the bootloader finds them. The version is derived dynamically (`sysconfig`), so the build isn't tied to any specific Python version.
+- Builds now come from `WhyType.spec` (single source of truth); `build.py` runs it.
+
 ## v1.1.14 - macOS Menu-Bar Icon Rendering
 
 ### Fixed
