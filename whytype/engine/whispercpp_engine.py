@@ -229,9 +229,23 @@ class WhisperCppEngine(TranscriptionEngine):
             cmd, capture_output=True, text=True, timeout=600, **kwargs
         )
         if proc.returncode != 0:
+            # Always report the exit code. A crash before the process can write
+            # anything — an illegal instruction on a CPU the binary was not
+            # built for, a missing DLL — leaves stderr empty, and the bare
+            # "whisper-cli failed" that used to be raised gave no way to tell
+            # that apart from a normal error. On Windows those show up as large
+            # unsigned status codes (0xC000001D = illegal instruction).
+            detail = (proc.stderr or "").strip()
+            last_line = detail.splitlines()[-1] if detail else ""
+            code = proc.returncode & 0xFFFFFFFF if proc.returncode < 0 else proc.returncode
+            logger.error(
+                "whisper-cli exited %d (0x%08X); stderr=%r",
+                proc.returncode, code, detail[-500:],
+            )
             raise RuntimeError(
-                (proc.stderr or "whisper-cli failed").strip().splitlines()[-1]
-                if proc.stderr else "whisper-cli failed"
+                f"whisper-cli failed (exit 0x{code:08X})"
+                + (f": {last_line}" if last_line else
+                   " with no output — the binary may not be compatible with this CPU")
             )
         lines = [ln.strip() for ln in proc.stdout.splitlines() if ln.strip()]
         return " ".join(lines).strip()
