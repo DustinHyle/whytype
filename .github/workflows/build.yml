@@ -60,6 +60,12 @@ jobs:
           # Pin --ref to a tag for reproducible release builds.
           python scripts/build_whispercpp.py --backend auto
 
+      # Regression tests. The Windows audio backend cannot be exercised on CI
+      # (no audio endpoint on the runners), so these stub pycaw and verify the
+      # control flow instead — a pycaw API change silently broke muting once.
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
       # Windows/Linux: build with the runner's Python (used for the installer
       # bundle's reference only — the bundle ships source + the native engine).
       - name: Install Python dependencies
