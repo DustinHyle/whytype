@@ -22,6 +22,7 @@ import argparse
 import os
 import re
 import sys
+import subprocess
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -112,6 +113,18 @@ def build_standalone(src_dir: str, platform: str, version: str,
     if os.path.exists(out):
         os.remove(out)
     parent = os.path.dirname(os.path.abspath(src_dir))
+
+    if sys.platform == "darwin":
+        # Use ditto, Apple's archiver, for .app bundles. Qt frameworks are full
+        # of symlinks (Foo.framework/Foo -> Versions/A/Foo); os.walk reports
+        # those as regular files and zipfile then stores a complete second copy
+        # of every framework binary. That alone doubled the download. ditto
+        # preserves the symlinks, along with permissions and code signatures.
+        subprocess.run(
+            ["ditto", "-c", "-k", "--keepParent", src_dir, out], check=True
+        )
+        return out
+
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
         for dirpath, dirnames, filenames in os.walk(src_dir):
             for fn in filenames:
