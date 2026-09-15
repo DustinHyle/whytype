@@ -1,3 +1,3 @@
 """WhyType — Voice dictation with local AI."""
 
-__version__ = "1.1.16"
+__version__ = "1.2.0"

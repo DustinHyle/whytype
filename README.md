@@ -16,6 +16,8 @@ Mac, or Linux. No account or sign-in required.
 - **Simulated typing** — transcribed text is typed character-by-character into the focused field
 - **Choose your model** — download only the models you want, switch between them anytime
 - **Custom models** — use your own GGML/GGUF whisper.cpp model
+- **Mute while recording** — silences music and other playback so it can't bleed into your microphone
+- **On-screen indicator** — a floating pill with a live microphone level, so you can see your voice is being picked up
 
 ## Default Shortcut
 
@@ -173,6 +175,8 @@ Open **Settings** from the tray menu to configure:
 |---------|-------------|
 | Shortcut | Capture a new global keyboard shortcut |
 | Recording mode | Hold or Toggle |
+| Mute system audio while recording | Silences playback while you dictate, then restores your previous state |
+| Show recording indicator on screen | Floating pill with a live microphone level |
 | Microphone | Use the system default, or pick a specific input device |
 | Acceleration | Automatic / GPU / CPU |
 | Installed Models | Select from downloaded models or a custom model path |
@@ -227,6 +231,7 @@ whytype/
 │   ├── config.py             # Settings persistence
 │   ├── models.py             # GGML model registry and download helpers
 │   ├── recorder.py           # Microphone audio capture
+│   ├── audio_output.py       # System output muting while recording
 │   ├── typer.py              # Simulated keyboard input
 │   ├── engine/               # Pluggable transcription engines
 │   │   ├── base.py           # TranscriptionEngine interface
@@ -234,7 +239,8 @@ whytype/
 │   ├── assets/               # App icon (png/ico/icns)
 │   ├── bin/                  # Bundled whisper-cli binary (built per platform)
 │   └── ui/
-│       └── settings_dialog.py
+│       ├── settings_dialog.py
+│       └── recording_indicator.py  # On-screen recording pill
 ├── scripts/
 │   └── build_whispercpp.py   # Build/stage the whisper.cpp engine binary
 ├── install.bat               # Windows installer

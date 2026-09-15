@@ -29,6 +29,8 @@ DEFAULT_CONFIG = {
     "recording_mode": "hold",
     "device": "auto",  # auto | gpu | cpu
     "input_device": "",  # "" = OS default microphone; else device name
+    "mute_output_while_recording": True,
+    "show_recording_indicator": True,
 }
 
 
@@ -114,6 +116,34 @@ class Config:
     @input_device.setter
     def input_device(self, value: str) -> None:
         self._data["input_device"] = value
+
+    @property
+    def mute_output_while_recording(self) -> bool:
+        """Mute the system's audio output for the duration of a recording."""
+        return bool(
+            self._data.get(
+                "mute_output_while_recording",
+                DEFAULT_CONFIG["mute_output_while_recording"],
+            )
+        )
+
+    @mute_output_while_recording.setter
+    def mute_output_while_recording(self, value: bool) -> None:
+        self._data["mute_output_while_recording"] = bool(value)
+
+    @property
+    def show_recording_indicator(self) -> bool:
+        """Show the on-screen recording pill while recording/transcribing."""
+        return bool(
+            self._data.get(
+                "show_recording_indicator",
+                DEFAULT_CONFIG["show_recording_indicator"],
+            )
+        )
+
+    @show_recording_indicator.setter
+    def show_recording_indicator(self, value: bool) -> None:
+        self._data["show_recording_indicator"] = bool(value)
 
     def effective_model(self) -> str:
         """Return the active model identifier: custom path if valid, otherwise built-in name."""
