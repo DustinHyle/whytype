@@ -57,14 +57,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install cmake
           # backend auto = Vulkan on Linux/Windows (any GPU), Metal on macOS.
-          # Pin --ref to a tag for reproducible release builds.
+          # The whisper.cpp ref and CPU baseline are pinned in the script.
           python scripts/build_whispercpp.py --backend auto
-
-      # Regression tests. The Windows audio backend cannot be exercised on CI
-      # (no audio endpoint on the runners), so these stub pycaw and verify the
-      # control flow instead — a pycaw API change silently broke muting once.
-      - name: Run tests
-        run: python -m unittest discover -s tests -v
 
       # Windows/Linux: build with the runner's Python (used for the installer
       # bundle's reference only — the bundle ships source + the native engine).
@@ -73,6 +67,15 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install pyinstaller
+
+      # Regression tests. The Windows audio backend cannot be exercised on CI
+      # (the runners have no audio endpoint), so these stub pycaw and verify the
+      # control flow instead — a pycaw API change silently broke muting once.
+      # Must run AFTER the dependencies are installed: the tests import
+      # whytype.engine, which needs numpy.
+      - name: Run tests (Windows/Linux)
+        if: runner.os != 'macOS'
+        run: python -m unittest discover -s tests -v
 
       # macOS: PyInstaller must use a NON-relocatable Python or the bundled app
       # crashes with "No module named '_struct'". actions/setup-python ships a
@@ -85,6 +88,7 @@ jobs:
           source buildenv/bin/activate
           python -m pip install --upgrade pip
           pip install -r requirements.txt pyinstaller
+          python -m unittest discover -s tests -v
           python build.py
 
       - name: Build (Windows/Linux)

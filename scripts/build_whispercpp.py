@@ -16,14 +16,17 @@ from __future__ import annotations
 
 import argparse
 import os
+import platform
 import shutil
 import subprocess
 import sys
 import tempfile
 
 REPO = "https://github.com/ggml-org/whisper.cpp"
-# Pin in CI for reproducible builds, e.g. --ref v1.7.5
-DEFAULT_REF = "master"
+# Pinned, not "master": an unpinned build makes every release a different
+# upstream snapshot, so a regression lands in users' hands with nothing in the
+# repo recording what changed.
+DEFAULT_REF = "v1.9.4"
 
 # backend -> extra CMake flags
 BACKEND_FLAGS = {
@@ -44,6 +47,32 @@ def default_backend() -> str:
 def run(cmd, **kw):
     print("+", " ".join(cmd))
     subprocess.check_call(cmd, **kw)
+
+
+def _portability_flags() -> list:
+    """CMake flags that keep the binary runnable on machines other than this one.
+
+    ggml defaults GGML_NATIVE=ON, i.e. -march=native, which bakes the *build*
+    machine's instruction set into the binary. CI runners are not a fixed CPU:
+    the v1.2.1 Windows build landed on a runner with AVX-512 and shipped 5,911
+    AVX-512 instructions, so it died with an illegal instruction — no stderr,
+    just a non-zero exit — on every user whose CPU lacks it. The v1.2.0 build
+    of the same source had none. Whether a release runs at all must not depend
+    on which runner GitHub happened to allocate.
+
+    The baseline is AVX2/FMA/F16C (Intel Haswell, 2013; AMD Excavator, 2015),
+    which the working v1.2.0 binary already relied on.
+    """
+    flags = ["-DGGML_NATIVE=OFF"]
+    if platform.machine().lower() in ("x86_64", "amd64", "x86", "i386", "i686"):
+        flags += [
+            "-DGGML_AVX=ON",
+            "-DGGML_AVX2=ON",
+            "-DGGML_FMA=ON",
+            "-DGGML_F16C=ON",
+            "-DGGML_AVX512=OFF",
+        ]
+    return flags
 
 
 def main() -> None:
@@ -75,6 +104,7 @@ def main() -> None:
                 "-DBUILD_SHARED_LIBS=OFF",
                 "-DWHISPER_BUILD_TESTS=OFF",
                 "-DWHISPER_BUILD_EXAMPLES=ON",
+                *_portability_flags(),
                 *BACKEND_FLAGS[bk],
             ], cwd=src)
             run(["cmake", "--build", build, "--config", "Release",
