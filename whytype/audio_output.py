@@ -43,8 +43,35 @@ def _run(cmd: list[str], timeout: float = 2.0) -> Optional[str]:
     return result.stdout
 
 
+def _endpoint_volume(device):
+    """Return the IAudioEndpointVolume interface for a pycaw speakers object.
+
+    pycaw changed the return type of AudioUtilities.GetSpeakers(): up to
+    20230407 it handed back a raw IMMDevice (which you Activate yourself);
+    newer builds return an AudioDevice wrapper whose EndpointVolume property
+    does that for you and which has no Activate at all. Our version floor
+    admits both, and calling Activate on the wrapper raises
+    AttributeError — which is exactly how muting silently failed on Windows
+    in v1.2.0. Support both shapes.
+    """
+    volume = getattr(device, "EndpointVolume", None)
+    if volume is not None:
+        return volume
+
+    from ctypes import POINTER, cast
+
+    from comtypes import CLSCTX_ALL
+    from pycaw.pycaw import IAudioEndpointVolume
+
+    interface = device.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+    return cast(interface, POINTER(IAudioEndpointVolume))
+
+
 def _endpoint_name(device) -> str:
     """Friendly name of a Core Audio device, for diagnostics only."""
+    name = getattr(device, "FriendlyName", None)
+    if name:
+        return name
     try:
         from pycaw.pycaw import AudioUtilities
 
@@ -161,11 +188,8 @@ class OutputMuter:
 
     def _set_muted_windows(self, muted: bool) -> Optional[bool]:
         """Core Audio endpoint mute via pycaw."""
-        from ctypes import POINTER, cast
-
         import comtypes
-        from comtypes import CLSCTX_ALL
-        from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+        from pycaw.pycaw import AudioUtilities
 
         # COM is per-thread. The worker thread has never been initialized, but
         # guard anyway: if COM is already up in a different apartment model,
@@ -180,8 +204,7 @@ class OutputMuter:
 
         try:
             speakers = AudioUtilities.GetSpeakers()
-            interface = speakers.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            volume = cast(interface, POINTER(IAudioEndpointVolume))
+            volume = _endpoint_volume(speakers)
             previous = bool(volume.GetMute())
             volume.SetMute(1 if muted else 0, None)
             # Name the endpoint we acted on: muting the default render device
@@ -193,7 +216,7 @@ class OutputMuter:
             # Release the COM proxies BEFORE tearing the apartment down. Python
             # only drops a frame's locals after `finally` runs, so leaving them
             # alive here would call Release() on a dead apartment.
-            del volume, interface, speakers
+            del volume, speakers
             return previous
         finally:
             if initialized:

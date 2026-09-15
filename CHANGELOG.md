@@ -3,6 +3,7 @@
 ## v1.2.1 - Fixes for v1.2.0
 
 ### Fixed
+- **Windows muting never worked in v1.2.0 and now does.** `pycaw` changed the return type of `AudioUtilities.GetSpeakers()`: older releases hand back a raw `IMMDevice` you call `Activate()` on, newer ones return an `AudioDevice` wrapper that has no `Activate()` at all. Our version floor allowed either, so a fresh install got the new one and every mute attempt died with `AttributeError: 'AudioDevice' object has no attribute 'Activate'` — logged as a warning and silently swallowed, so recording carried on unmuted. Both shapes are now supported, with regression tests that stub `pycaw` and run on every platform.
 - **Muting no longer delays the start of recording.** The mute backends (osascript, wpctl/pactl, Core Audio) ran inline on the GUI thread before the microphone opened, adding hundreds of milliseconds — seconds in the worst case — between the hotkey and capture, so the first words spoken were lost. Mute and unmute are now applied on a worker thread that keeps requests in order, and the app no longer freezes at the start and end of a recording.
 - **macOS: the recording indicator no longer hides itself.** Qt tool windows are backed by an NSPanel, which macOS hides whenever the app is not frontmost — which is always, for a menu-bar app you dictate *from*. The pill was therefore invisible in the exact situation it exists for.
 - **Windows: COM interfaces were released after the apartment was torn down**, which is undefined behavior and could make muting fail or crash. The Core Audio proxies are now released before `CoUninitialize`.
@@ -13,6 +14,7 @@
 
 ### Added
 - **Settings shows the running version**, so it can be quoted in bug reports.
+- A test suite (stdlib `unittest`, no new dependencies) covering the audio-output backends, wired into CI on all three platforms.
 - Windows mute now logs which audio endpoint it acted on — muting the default device is inaudible if playback is routed elsewhere, which was previously invisible in logs.
 
 ## v1.2.0 - Mute While Recording, On-Screen Indicator
