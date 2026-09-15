@@ -1,5 +1,16 @@
 # Why Type Changelog
 
+## v1.2.2 - Transcription Fix (Important)
+
+### Fixed
+- **Transcription was broken in v1.2.1 on any CPU without AVX-512.** The bundled `whisper-cli` is compiled by CI, and ggml defaults to `-march=native`, which bakes the *build machine's* instruction set into the binary. Nothing pinned it, so the CPU a release required was decided by whichever runner GitHub happened to allocate. The v1.2.1 build landed on a runner with AVX-512 and shipped 5,911 AVX-512 instructions; the v1.2.0 build of the same source had none. On a CPU without it the binary died instantly with an illegal instruction, which showed up as three apparently separate faults: every transcription failed with `whisper-cli failed`, CPU-only runs failed too, and **acceleration silently dropped from GPU to CPU** because the GPU probe runs the same binary and read the crash as "no GPU". The engine is now built to a portable AVX2/FMA/F16C baseline, and whisper.cpp is pinned to `v1.9.4`.
+  - If your GPU acceleration appeared to switch to CPU in v1.2.1, it returns on its own here — the fallback was never written to your settings.
+- **Your chosen microphone was ignored.** Device names are stripped before being saved, but were compared against the raw name from the system. Windows pads device names to 31 characters, so a selected microphone could never match and every recording silently fell back to the system default. Both sides are now stripped before comparison.
+- A failed `whisper-cli` run now reports its exit code. A crash with no output used to surface as a bare "whisper-cli failed", indistinguishable from an ordinary error.
+
+### Changed
+- Tests now run in CI *after* dependencies are installed — the step had been placed before them, so it only ever passed because nothing it imported needed them.
+
 ## v1.2.1 - Fixes for v1.2.0
 
 ### Fixed
