@@ -63,9 +63,17 @@ class AudioRecorder:
         """
         if not self._device:
             return None
+        # Compare stripped names on both sides. list_input_devices() strips
+        # before the name reaches Settings and the config file, but Windows MME
+        # pads/truncates device names to 31 characters, so the enumerated name
+        # can carry trailing whitespace the saved one does not. Comparing raw
+        # against stripped meant such a microphone was never found, and the
+        # user's choice silently fell back to the default on every recording.
+        wanted = self._device.strip()
         try:
             for idx, dev in enumerate(sd.query_devices()):
-                if dev.get("max_input_channels", 0) > 0 and dev.get("name") == self._device:
+                name = (dev.get("name") or "").strip()
+                if dev.get("max_input_channels", 0) > 0 and name == wanted:
                     return idx
         except Exception:
             logger.debug("Could not enumerate devices", exc_info=True)
