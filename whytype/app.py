@@ -230,13 +230,13 @@ try:
     from whytype.ui.recording_indicator import RecordingIndicator
 except Exception:
     RecordingIndicator = None
-    logger.exception("Recording indicator import failed")
+    logger.debug("Recording indicator unavailable", exc_info=True)
 
 try:
     from whytype.audio_output import OutputMuter
 except Exception:
     OutputMuter = None
-    logger.exception("Output muter import failed")
+    logger.debug("Output muter unavailable", exc_info=True)
 
 
 # Only define these if pynput loaded successfully
@@ -386,6 +386,10 @@ class WhyTypeApp:
         self._listener: Optional[Listener] = None
         self._pressed_modifiers: set[Key] = set()
         self._shortcut_triggered = False
+        # Set when the hotkey is released before _on_start_recording has
+        # finished. _state is read from the listener thread, so a quick tap can
+        # otherwise have its stop dropped, leaving the app recording forever.
+        self._stop_pending = False
 
         self._muter = OutputMuter() if OutputMuter is not None else None
         self._indicator = None
@@ -710,8 +714,12 @@ class WhyTypeApp:
 
         if released_target or not still_holding:
             self._shortcut_triggered = False
-            if self.config.recording_mode == "hold" and self._state == "recording":
-                self.signaler.stop_recording.emit()
+            if self.config.recording_mode == "hold":
+                # Latch unconditionally: if recording has not started yet, the
+                # start handler picks this up once it has.
+                self._stop_pending = True
+                if self._state == "recording":
+                    self.signaler.stop_recording.emit()
 
     def _show_indicator(self, state: str) -> None:
         """Show/update the on-screen pill, if enabled and available."""
@@ -772,6 +780,9 @@ class WhyTypeApp:
             self.signaler.show_settings.emit()
             return
 
+        self._stop_pending = False
+        # Enqueued, not applied inline: the backends are slow enough that
+        # muting here would delay capture and clip the first words spoken.
         self._mute_output()
         try:
             self.recorder.start()
@@ -784,10 +795,17 @@ class WhyTypeApp:
             self._unmute_output()
             self._show_error(f"Failed to start recording:\n{e}")
             self._state = "idle"
+            return
+
+        if self._stop_pending:
+            # The hotkey was released while we were starting up.
+            logger.info("Hotkey released during startup; stopping immediately")
+            self.signaler.stop_recording.emit()
 
     def _on_stop_recording(self) -> None:
         if self._state != "recording":
             return
+        self._stop_pending = False
         audio = self.recorder.stop()
         self._unmute_output()
         self._state = "transcribing"
@@ -991,8 +1009,10 @@ class WhyTypeApp:
         logger.info("WhyType shutting down")
         self._stop_listener()
         self.recorder.stop()
-        # Never leave the user's speakers muted because they quit mid-recording.
-        self._unmute_output()
+        # Synchronous: the muter's worker is a daemon thread and would be
+        # killed by interpreter exit, leaving the speakers muted for good.
+        if self._muter is not None:
+            self._muter.restore_now()
         if self._indicator is not None:
             self._indicator.hide()
         self.app.quit()

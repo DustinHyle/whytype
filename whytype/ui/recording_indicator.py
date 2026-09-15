@@ -54,6 +54,11 @@ class RecordingIndicator(QWidget):
             | Qt.WindowType.Tool  # keeps it out of the taskbar and unfocusable
             | Qt.WindowType.WindowTransparentForInput
         )
+        # Qt maps Qt::Tool to an NSPanel, which macOS hides whenever the
+        # application is not active. Why Type is a tray app and is never
+        # frontmost while the user dictates into another window, so without
+        # this the pill would be hidden in exactly the case it exists for.
+        self.setAttribute(Qt.WidgetAttribute.WA_MacAlwaysShowToolWindow)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
@@ -77,10 +82,13 @@ class RecordingIndicator(QWidget):
         self._state = state
         if state == "recording":
             self._bars = [0.0] * _BAR_COUNT
+        # Reposition every time, not just when hidden: dismiss() leaves the
+        # widget visible through the fade, so a dictation started during it
+        # would otherwise re-light on the previous screen.
+        self._move_to_active_screen()
         if not self.isVisible():
-            self._move_to_active_screen()
             self.show()
-            self.raise_()
+        self.raise_()
         self._timer.start()
         self.update()
 

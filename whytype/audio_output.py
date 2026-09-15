@@ -12,8 +12,10 @@ muted.
 from __future__ import annotations
 
 import logging
+import queue
 import subprocess
 import sys
+import threading
 from typing import Optional
 
 logger = logging.getLogger("whytype.audio_output")
@@ -41,16 +43,76 @@ def _run(cmd: list[str], timeout: float = 2.0) -> Optional[str]:
     return result.stdout
 
 
+def _endpoint_name(device) -> str:
+    """Friendly name of a Core Audio device, for diagnostics only."""
+    try:
+        from pycaw.pycaw import AudioUtilities
+
+        return AudioUtilities.CreateDevice(device).FriendlyName or "?"
+    except Exception:
+        return "?"
+
+
 class OutputMuter:
-    """Mutes and restores the system's default audio output device."""
+    """Mutes and restores the system's default audio output device.
+
+    Every backend is slow — osascript and wpctl are subprocesses, and Core Audio
+    can block on device enumeration — so :meth:`mute` and :meth:`unmute` only
+    enqueue the request and return immediately. Running them inline would delay
+    the start of recording and clip the first words the user speaks, which is
+    exactly what this feature exists to protect.
+
+    A single worker thread applies requests in submission order, so a mute can
+    never overtake the unmute that preceded it and strand the user in silence.
+    """
 
     def __init__(self) -> None:
         # None = not currently muted by us. Otherwise the mute state we found
         # before muting, to be restored on unmute().
         self._previous: Optional[bool] = None
+        # Serializes backend calls and access to _previous.
+        self._lock = threading.Lock()
+        self._queue: "queue.Queue[bool]" = queue.Queue()
+        threading.Thread(
+            target=self._run, name="whytype-muter", daemon=True
+        ).start()
 
     def mute(self) -> None:
-        """Mute system output, remembering the state to restore."""
+        """Request a mute. Applied asynchronously."""
+        self._queue.put(True)
+
+    def unmute(self) -> None:
+        """Request the mute state captured by :meth:`mute` be restored."""
+        self._queue.put(False)
+
+    def restore_now(self) -> None:
+        """Synchronously restore output, discarding pending requests.
+
+        Used at shutdown: the worker is a daemon thread and would be killed
+        mid-flight by interpreter exit, which could leave the user's speakers
+        muted with no running app to unmute them.
+        """
+        while True:
+            try:
+                self._queue.get_nowait()
+            except queue.Empty:
+                break
+        with self._lock:
+            self._unmute_locked()
+
+    def _run(self) -> None:
+        while True:
+            want_muted = self._queue.get()
+            with self._lock:
+                try:
+                    if want_muted:
+                        self._mute_locked()
+                    else:
+                        self._unmute_locked()
+                except Exception:
+                    logger.warning("Audio output mute request failed", exc_info=True)
+
+    def _mute_locked(self) -> None:
         if self._previous is not None:
             return  # already muted by us
         try:
@@ -64,19 +126,25 @@ class OutputMuter:
         self._previous = previous
         logger.info("Muted system audio output (was muted=%s)", previous)
 
-    def unmute(self) -> None:
-        """Restore the mute state captured by :meth:`mute`."""
+    def _unmute_locked(self) -> None:
         if self._previous is None:
             return
-        previous, self._previous = self._previous, None
-        if previous:
+        if self._previous:
             # The user was already muted before we started; leave them muted.
+            self._previous = None
             return
         try:
-            self._set_muted(False)
+            restored = self._set_muted(False)
         except Exception:
             logger.warning("Could not restore system audio output", exc_info=True)
             return
+        if restored is None:
+            # Every backend failed — the output device may have been unplugged
+            # mid-recording. Keep _previous set so a later unmute (or quit)
+            # retries rather than silently leaving the user muted.
+            logger.warning("Could not restore system audio output; will retry")
+            return
+        self._previous = None
         logger.info("Restored system audio output")
 
     # --- Platform backends ------------------------------------------------
@@ -99,10 +167,10 @@ class OutputMuter:
         from comtypes import CLSCTX_ALL
         from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 
-        # COM is per-thread. Qt may already have initialized this thread, in
-        # which case CoInitialize raises RPC_E_CHANGED_MODE (a different
-        # apartment model) — the existing apartment is fine to use, so only
-        # uninitialize what we actually initialized.
+        # COM is per-thread. The worker thread has never been initialized, but
+        # guard anyway: if COM is already up in a different apartment model,
+        # CoInitialize raises and the existing apartment is fine to use — we
+        # just must not uninitialize what we did not initialize.
         initialized = False
         try:
             comtypes.CoInitialize()
@@ -116,6 +184,16 @@ class OutputMuter:
             volume = cast(interface, POINTER(IAudioEndpointVolume))
             previous = bool(volume.GetMute())
             volume.SetMute(1 if muted else 0, None)
+            # Name the endpoint we acted on: muting the default render device
+            # does nothing audible if playback is routed somewhere else, and
+            # that is otherwise invisible in a bug report.
+            logger.info(
+                "Core Audio endpoint mute=%s on %r", muted, _endpoint_name(speakers)
+            )
+            # Release the COM proxies BEFORE tearing the apartment down. Python
+            # only drops a frame's locals after `finally` runs, so leaving them
+            # alive here would call Release() on a dead apartment.
+            del volume, interface, speakers
             return previous
         finally:
             if initialized:

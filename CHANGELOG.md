@@ -1,5 +1,20 @@
 # Why Type Changelog
 
+## v1.2.1 - Fixes for v1.2.0
+
+### Fixed
+- **Muting no longer delays the start of recording.** The mute backends (osascript, wpctl/pactl, Core Audio) ran inline on the GUI thread before the microphone opened, adding hundreds of milliseconds — seconds in the worst case — between the hotkey and capture, so the first words spoken were lost. Mute and unmute are now applied on a worker thread that keeps requests in order, and the app no longer freezes at the start and end of a recording.
+- **macOS: the recording indicator no longer hides itself.** Qt tool windows are backed by an NSPanel, which macOS hides whenever the app is not frontmost — which is always, for a menu-bar app you dictate *from*. The pill was therefore invisible in the exact situation it exists for.
+- **Windows: COM interfaces were released after the apartment was torn down**, which is undefined behavior and could make muting fail or crash. The Core Audio proxies are now released before `CoUninitialize`.
+- **A quick tap of the hotkey could leave the app recording with the speakers muted.** The hotkey release was dropped if it arrived before recording had finished starting; the release is now latched and applied once recording begins.
+- **Failing to restore audio no longer reports success.** If every backend fails (for example the output device is unplugged mid-recording), the app now logs a warning and retries on the next unmute or on quit, instead of logging "Restored" and leaving the user muted.
+- The indicator now repositions if a dictation starts while the previous one is still fading out, instead of reappearing on the old screen.
+- A broken or headless Qt install no longer logs a misleading ERROR traceback for the indicator and muter imports, which are handled conditions.
+
+### Added
+- **Settings shows the running version**, so it can be quoted in bug reports.
+- Windows mute now logs which audio endpoint it acted on — muting the default device is inaudible if playback is routed elsewhere, which was previously invisible in logs.
+
 ## v1.2.0 - Mute While Recording, On-Screen Indicator
 
 ### Added

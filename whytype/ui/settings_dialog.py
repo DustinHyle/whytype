@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
+from whytype import __version__
 from whytype.config import Config
 from whytype.recorder import list_input_devices
 from whytype.models import MODEL_REGISTRY, is_model_downloaded, download_model
@@ -341,6 +342,13 @@ class SettingsDialog(QDialog):
 
         # Buttons
         btn_layout = QHBoxLayout()
+        version_label = QLabel(f"Version {__version__}")
+        version_label.setStyleSheet("color: gray;")
+        version_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        version_label.setToolTip("The version of Why Type currently running")
+        btn_layout.addWidget(version_label)
         btn_layout.addStretch()
         self.save_btn = QPushButton("Save")
         self.cancel_btn = QPushButton("Cancel")
