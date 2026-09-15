@@ -1,5 +1,12 @@
 # Why Type Changelog
 
+## v1.2.2 - Much Smaller macOS Download
+
+### Changed
+- **The macOS download shrinks dramatically.** Two separate problems compounded:
+  - The build collected all ~100 Qt modules, though Why Type imports only `QtCore`, `QtGui` and `QtWidgets`. That included `QtWebEngineCore` — a complete 227 MB copy of Chromium — plus Qt Quick, QML, Multimedia, PDF, Charts and the rest. Those modules are now kept out of the dependency graph.
+  - The `.app` was archived with Python's `zipfile`, which follows the symlinks inside Qt frameworks and writes a full second copy of every framework binary. Of 1,817 MiB uncompressed, **1,016 MiB was duplicate copies**. macOS `.app` bundles are now archived with `ditto`, Apple's own tool, which preserves symlinks, permissions and code signatures.
+
 ## v1.2.1 - Fixes for v1.2.0
 
 ### Fixed
