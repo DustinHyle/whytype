@@ -228,6 +228,23 @@ class SettingsDialog(QDialog):
         mic_layout.addWidget(self.mic_combo)
         layout.addWidget(mic_group)
 
+        # While recording
+        recording_group = QGroupBox("While Recording")
+        recording_layout = QVBoxLayout(recording_group)
+        self.mute_output_check = QCheckBox("Mute system audio while recording")
+        self.mute_output_check.setToolTip(
+            "Silences music and other playback so it can't bleed into your "
+            "microphone. Your previous volume is restored afterwards."
+        )
+        recording_layout.addWidget(self.mute_output_check)
+        self.indicator_check = QCheckBox("Show recording indicator on screen")
+        self.indicator_check.setToolTip(
+            "Shows a floating pill with a live microphone level, so you can "
+            "see that your voice is being picked up."
+        )
+        recording_layout.addWidget(self.indicator_check)
+        layout.addWidget(recording_group)
+
         # Acceleration (CPU / GPU)
         accel_group = QGroupBox("Acceleration")
         accel_layout = QVBoxLayout(accel_group)
@@ -447,6 +464,9 @@ class SettingsDialog(QDialog):
         else:
             self.hold_radio.setChecked(True)
 
+        self.mute_output_check.setChecked(self.config.mute_output_while_recording)
+        self.indicator_check.setChecked(self.config.show_recording_indicator)
+
         device = self.config.device
         if device == "gpu":
             self.device_gpu_radio.setChecked(True)
@@ -492,6 +512,8 @@ class SettingsDialog(QDialog):
 
         self.config.shortcut = shortcut
         self.config.recording_mode = "toggle" if self.toggle_radio.isChecked() else "hold"
+        self.config.mute_output_while_recording = self.mute_output_check.isChecked()
+        self.config.show_recording_indicator = self.indicator_check.isChecked()
         if self.device_gpu_radio.isChecked():
             self.config.device = "gpu"
         elif self.device_cpu_radio.isChecked():

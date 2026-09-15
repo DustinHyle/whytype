@@ -5,6 +5,10 @@ pynput>=1.7.6
 sounddevice>=0.4.6
 numpy>=1.24.0
 platformdirs>=3.0.0
+# Windows only: Core Audio endpoint control, used to mute system output while
+# recording so playback can't bleed into the microphone.
+pycaw>=20230407; sys_platform == "win32"
+comtypes>=1.2.0; sys_platform == "win32"
 # macOS only: Accessibility-permission check for keystroke injection.
 pyobjc-framework-ApplicationServices>=8.5; sys_platform == "darwin"
 # Transcription is handled by a bundled whisper.cpp binary (no PyTorch).

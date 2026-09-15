@@ -44,6 +44,9 @@ class AudioRecorder:
         self._frame_count = 0
         self._capped = False
         self._recording: Optional[list[np.ndarray]] = None
+        # Peak amplitude (0.0-1.0) of the most recent callback block, read by
+        # the on-screen recording indicator to show a live input level.
+        self._level = 0.0
         self._stream: Optional[sd.InputStream] = None
         self._lock = threading.Lock()
 
@@ -78,6 +81,7 @@ class AudioRecorder:
                 raise RuntimeError("Recording is already in progress")
             self._recording = []
             self._frame_count = 0
+            self._level = 0.0
             self._capped = False
             try:
                 # Log which input device is actually being used, to diagnose
@@ -105,7 +109,9 @@ class AudioRecorder:
                 raise
 
     def _callback(self, indata: np.ndarray, frames: int, time_info, status) -> None:
+        peak = float(np.max(np.abs(indata))) if frames else 0.0
         with self._lock:
+            self._level = peak
             if self._recording is None or self._capped:
                 return
             if self._frame_count >= self._max_frames:
@@ -126,6 +132,7 @@ class AudioRecorder:
             self._stream = None
             chunks = self._recording
             self._recording = None
+            self._level = 0.0
 
         if stream is not None:
             try:
@@ -137,6 +144,11 @@ class AudioRecorder:
         if chunks:
             return np.concatenate(chunks, axis=0).flatten()
         return None
+
+    def level(self) -> float:
+        """Peak amplitude (0.0-1.0) of the most recently captured audio block."""
+        with self._lock:
+            return self._level
 
     def is_recording(self) -> bool:
         with self._lock:

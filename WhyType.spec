@@ -37,7 +37,13 @@ _icon = {
     'darwin': 'whytype/assets/icon.icns',
 }.get(sys.platform)
 
-for _pkg in ('sounddevice', 'pynput', 'PySide6', 'platformdirs'):
+_packages = ['sounddevice', 'pynput', 'PySide6', 'platformdirs']
+if sys.platform == 'win32':
+    # Core Audio mute (mute-while-recording). COM interfaces are resolved
+    # dynamically, so collect_all is needed to bundle them.
+    _packages += ['pycaw', 'comtypes']
+
+for _pkg in _packages:
     _d, _b, _h = collect_all(_pkg)
     datas += _d
     binaries += _b

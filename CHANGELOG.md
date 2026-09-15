@@ -1,5 +1,11 @@
 # Why Type Changelog
 
+## v1.2.0 - Mute While Recording, On-Screen Indicator
+
+### Added
+- **Mute system audio while recording** (#1). Music, videos and calls are silenced for the duration of a recording so they can't bleed through the microphone into your transcription — or into the voice chat you're dictating to. Your previous mute state is restored afterwards, so if you were already muted you stay muted. Uses Core Audio on Windows, `osascript` on macOS, and wpctl/pactl/amixer on Linux. On by default; turn it off in **Settings → While Recording**.
+- **On-screen recording indicator** (#2). A floating pill in the style of the iPhone Dynamic Island appears at the top of your active screen while recording, showing a **live microphone level** so you can see your voice registering — previously users spoke full sentences to an app that was recording but not hearing them. It then shows transcribing and typing progress before fading out. The pill is click-through and never takes keyboard focus. On by default; turn it off in **Settings → While Recording**.
+
 ## v1.1.16 - macOS _struct Fix (Deterministic)
 
 ### Fixed

@@ -224,6 +224,20 @@ except Exception as exc:
     _UI_ERROR = str(exc)
     logger.exception("UI import failed")
 
+# The indicator and output muting are conveniences: a failure to import either
+# must not stop dictation from working.
+try:
+    from whytype.ui.recording_indicator import RecordingIndicator
+except Exception:
+    RecordingIndicator = None
+    logger.exception("Recording indicator import failed")
+
+try:
+    from whytype.audio_output import OutputMuter
+except Exception:
+    OutputMuter = None
+    logger.exception("Output muter import failed")
+
 
 # Only define these if pynput loaded successfully
 if _PYNPUT_CLASSES:
@@ -372,6 +386,9 @@ class WhyTypeApp:
         self._listener: Optional[Listener] = None
         self._pressed_modifiers: set[Key] = set()
         self._shortcut_triggered = False
+
+        self._muter = OutputMuter() if OutputMuter is not None else None
+        self._indicator = None
 
         self.tray_icon: Optional[QSystemTrayIcon] = None
         self._tray_menu: Optional[QMenu] = None
@@ -696,6 +713,35 @@ class WhyTypeApp:
             if self.config.recording_mode == "hold" and self._state == "recording":
                 self.signaler.stop_recording.emit()
 
+    def _show_indicator(self, state: str) -> None:
+        """Show/update the on-screen pill, if enabled and available."""
+        if not self.config.show_recording_indicator or RecordingIndicator is None:
+            return
+        try:
+            if self._indicator is None:
+                self._indicator = RecordingIndicator(self.recorder.level)
+            self._indicator.show_state(state)
+        except Exception:
+            logger.debug("Could not show recording indicator", exc_info=True)
+
+    def _hide_indicator(self) -> None:
+        if self._indicator is None:
+            return
+        try:
+            self._indicator.dismiss()
+        except Exception:
+            logger.debug("Could not hide recording indicator", exc_info=True)
+
+    def _mute_output(self) -> None:
+        if self._muter is not None and self.config.mute_output_while_recording:
+            self._muter.mute()
+
+    def _unmute_output(self) -> None:
+        if self._muter is not None:
+            # Unconditional: if the setting was turned off mid-recording we
+            # still owe the user their audio back.
+            self._muter.unmute()
+
     def _on_start_recording(self) -> None:
         if self._state != "idle":
             return
@@ -726,13 +772,16 @@ class WhyTypeApp:
             self.signaler.show_settings.emit()
             return
 
+        self._mute_output()
         try:
             self.recorder.start()
             self._state = "recording"
             self.signaler.status_changed.emit("Recording...")
+            self._show_indicator("recording")
             logger.info("Recording started")
         except Exception as e:
             logger.exception("Failed to start recording")
+            self._unmute_output()
             self._show_error(f"Failed to start recording:\n{e}")
             self._state = "idle"
 
@@ -740,8 +789,10 @@ class WhyTypeApp:
         if self._state != "recording":
             return
         audio = self.recorder.stop()
+        self._unmute_output()
         self._state = "transcribing"
         self.signaler.status_changed.emit("Transcribing...")
+        self._show_indicator("transcribing")
         logger.info("Recording stopped, transcribing...")
         thread = threading.Thread(target=self._transcribe, args=(audio,), daemon=True)
         thread.start()
@@ -790,11 +841,14 @@ class WhyTypeApp:
     def _on_transcribe_done(self, text: str) -> None:
         self._state = "typing"
         self.signaler.status_changed.emit("Typing...")
+        self._show_indicator("typing")
         thread = threading.Thread(target=self._do_type, args=(text,), daemon=True)
         thread.start()
 
     def _on_transcribe_failed(self, error: str) -> None:
         self._state = "idle"
+        self._unmute_output()
+        self._hide_indicator()
         self.signaler.status_changed.emit("Ready")
         self._show_error(f"Transcription failed:\n\n{error}")
 
@@ -862,6 +916,7 @@ class WhyTypeApp:
 
     def _on_typing_done(self) -> None:
         self._state = "idle"
+        self._hide_indicator()
         self.signaler.status_changed.emit("Ready")
 
     def _show_settings(self) -> None:
@@ -936,6 +991,10 @@ class WhyTypeApp:
         logger.info("WhyType shutting down")
         self._stop_listener()
         self.recorder.stop()
+        # Never leave the user's speakers muted because they quit mid-recording.
+        self._unmute_output()
+        if self._indicator is not None:
+            self._indicator.hide()
         self.app.quit()
 
 
