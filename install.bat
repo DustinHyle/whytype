@@ -312,9 +312,15 @@ copy /Y "%SOURCE_DIR%\uninstall.bat" "%INSTALL_DIR%\uninstall.bat" >nul 2>&1
 
 :: --- Registry: Add/Remove Programs ---
 echo Registering installation...
+:: Read the version from the copy just installed, so Add/Remove Programs
+:: always shows the version that is actually on this computer.
+set "APP_VERSION=unknown"
+"%INSTALL_DIR%\.venv\Scripts\python.exe" -c "import whytype; print(whytype.__version__)" > "%TEMP%\whytype_version.txt" 2>nul
+set /p APP_VERSION=<"%TEMP%\whytype_version.txt"
+del "%TEMP%\whytype_version.txt" >nul 2>&1
 reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /f >nul 2>&1
 reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /v DisplayName /d "Why Type" /f >nul 2>&1
-reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /v DisplayVersion /d "1.1.16" /f >nul 2>&1
+reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /v DisplayVersion /d "%APP_VERSION%" /f >nul 2>&1
 reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /v Publisher /d "WhyType" /f >nul 2>&1
 reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /v InstallLocation /d "%INSTALL_DIR%" /f >nul 2>&1
 reg add "%REG_ROOT%\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhyType" /v UninstallString /d "\"%INSTALL_DIR%\uninstall.bat\"" /f >nul 2>&1

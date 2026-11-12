@@ -281,7 +281,11 @@ if [ "$OS" == "macos" ]; then
     echo ""
     echo "Creating app bundle..."
 
-    cat > "$INSTALL_DIR/Contents/Info.plist" << 'EOF'
+    # Read the version from the copy just installed, so Finder's "Get Info"
+    # always shows the version that is actually on this computer.
+    APP_VERSION="$("$VENV_DIR/bin/python" -c 'import whytype; print(whytype.__version__)' 2>/dev/null || echo unknown)"
+
+    cat > "$INSTALL_DIR/Contents/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -293,9 +297,9 @@ if [ "$OS" == "macos" ]; then
     <key>CFBundleIdentifier</key>
     <string>com.whytype.app</string>
     <key>CFBundleVersion</key>
-    <string>1.1.16</string>
+    <string>${APP_VERSION}</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1.16</string>
+    <string>${APP_VERSION}</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>

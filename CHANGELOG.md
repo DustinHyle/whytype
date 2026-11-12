@@ -1,5 +1,11 @@
 # Why Type Changelog
 
+## v1.2.5 - Correct Version Shown on Your Computer
+
+### Fixed
+- **Your computer now shows the version of Why Type you actually have installed.** The installers wrote a fixed `1.1.16` version label that was never updated. So Windows **Add/Remove Programs** showed 1.1.16 whatever version you installed, and so did Finder's **Get Info** for Mac copies installed with Terminal (`install.sh`). Both installers now read the version from the copy they have just installed. Installing this version replaces the old label.
+- A test now fails the build if an installer ever contains a fixed version number again, or if the two places the version is defined disagree.
+
 ## v1.2.4 - Updates Keep Your Settings
 
 ### Fixed

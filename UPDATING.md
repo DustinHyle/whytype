@@ -35,10 +35,6 @@ What changed in each version is listed in the [Changelog](CHANGELOG.md).
    have is also fine — it won't download it again.)
 7. When it finishes, open **Why Type** from the Start Menu.
 
-> Add/Remove Programs may show an older version number than the one you
-> installed. That's a cosmetic label — the version in **Settings** is the
-> real one.
-
 ---
 
 ## 🍎 Mac
