@@ -100,6 +100,10 @@ class FakeConfig:
 
 
 def _load_app_module(testcase):
+    try:
+        import PySide6.QtCore  # noqa: F401
+    except Exception as exc:  # headless CI runners may lack Qt's system libs
+        raise unittest.SkipTest(f"PySide6 unavailable: {exc}")
     keyboard = types.ModuleType("pynput.keyboard")
     keyboard.Key = FakeKey
     keyboard.KeyCode = FakeKeyCode
