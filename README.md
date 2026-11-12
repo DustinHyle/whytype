@@ -35,6 +35,7 @@ Platform-appropriate defaults (all customizable in Settings):
 ## Quick Start
 
 > For full step-by-step instructions see the **[Install Guide](INSTALL.md)**.
+> Already installed? See **[Updating Why Type](UPDATING.md)**.
 > Download builds from the
 > [Releases page](https://github.com/DustinHyle/whytype/releases/latest).
 

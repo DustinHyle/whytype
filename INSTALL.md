@@ -8,6 +8,9 @@ computer — nothing is sent to the cloud.
 [Releases page](https://github.com/DustinHyle/whytype/releases/latest).**
 Pick the file for your computer below.
 
+**Already have Why Type installed?** Follow
+[Updating Why Type](UPDATING.md) instead — your settings and models are kept.
+
 ---
 
 ## 🪟 Windows

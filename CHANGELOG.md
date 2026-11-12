@@ -1,5 +1,13 @@
 # Why Type Changelog
 
+## v1.2.4 - Updates Keep Your Settings
+
+### Fixed
+- **Windows: updating Why Type no longer resets your settings.** When you ran `install.bat` over an existing install, it replaced `settings.json` with a minimal default. That lost your shortcut, microphone, mute and indicator choices, and choosing **Skip** at the model prompt also cleared the selected model. The installer now keeps your existing settings, and only changes the model if you pick one.
+
+### Added
+- **[Updating Why Type](UPDATING.md)**: step-by-step update instructions for Windows, Mac and Linux, linked from the README, the Install Guide and every release page.
+
 ## v1.2.3 - Stuck Recording and Stuck Mute Fixes
 
 ### Fixed

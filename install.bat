@@ -249,10 +249,12 @@ if errorlevel 1 (
 )
 
 :: Verify the model file actually exists and save to config
-:: Use Python exit code to avoid batch quote-nesting issues
+:: Use Python exit code to avoid batch quote-nesting issues.
+:: Config() loads any existing settings.json, so an update keeps the user's
+:: shortcut, microphone and other settings; only the model is changed.
 echo.
 echo Verifying download and saving config...
-"%INSTALL_DIR%\.venv\Scripts\python.exe" -c "import os, json, sys; from whytype.models import is_model_downloaded; from platformdirs import user_config_dir; ok=is_model_downloaded('%MODEL_NAME%'); config_dir=user_config_dir('WhyType'); os.makedirs(config_dir,exist_ok=True); p=os.path.join(config_dir,'settings.json'); data={'shortcut':'ctrl+win','recording_mode':'hold','device':'auto','model':'%MODEL_NAME%'}; json.dump(data, open(p, 'w', encoding='utf-8'), indent=2); print('Config file:', p); sys.exit(0 if ok else 1)"
+"%INSTALL_DIR%\.venv\Scripts\python.exe" -c "import sys; from whytype.models import is_model_downloaded; from whytype.config import Config; ok=is_model_downloaded('%MODEL_NAME%'); c=Config(); c.model='%MODEL_NAME%'; c.save(); print('Config file:', c._config_path); sys.exit(0 if ok else 1)"
 if errorlevel 1 (
     echo WARNING: Model download appeared to succeed but the file was not found.
     echo You can try downloading again from Settings.
@@ -264,10 +266,10 @@ goto :create_launcher
 :skip_model
 echo.
 echo Skipping model download. You can download one later from Settings.
-:: Still write default config so shortcut is set
+:: Write the default config on a fresh install; an existing one is kept as is
 echo.
 echo Setting default configuration...
-"%INSTALL_DIR%\.venv\Scripts\python.exe" -c "import json, os; from platformdirs import user_config_dir; d=user_config_dir('WhyType'); os.makedirs(d, exist_ok=True); p=os.path.join(d,'settings.json'); data={'shortcut':'ctrl+win','recording_mode':'hold','device':'auto'}; json.dump(data, open(p, 'w', encoding='utf-8'), indent=2); print('Config dir:', d); print('Config file:', p)"
+"%INSTALL_DIR%\.venv\Scripts\python.exe" -c "from whytype.config import Config; c=Config(); c.save(); print('Config file:', c._config_path)"
 
 :create_launcher
 :: --- Create launchers ---

@@ -145,3 +145,4 @@ jobs:
             - **Linux:** `whytype-*-linux.zip` — extract, run `./install.sh`
 
             See the [Install Guide](https://github.com/DustinHyle/whytype/blob/main/INSTALL.md) for step-by-step instructions.
+            **Updating from an older version?** See [Updating Why Type](https://github.com/DustinHyle/whytype/blob/main/UPDATING.md) — your settings and models are kept.
