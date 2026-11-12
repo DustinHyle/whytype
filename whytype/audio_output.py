@@ -16,12 +16,20 @@ import queue
 import subprocess
 import sys
 import threading
+import time
 from typing import Optional
 
 logger = logging.getLogger("whytype.audio_output")
 
 # Hide the console window that would otherwise flash on every Windows call.
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+# If the device reads muted this soon after our own unmute, it re-muted itself
+# (some USB headsets do after a fast mute/unmute) — the user did not mute it.
+_REMUTE_WINDOW = 10.0
+
+# Windows: retries when the device flips back to muted after an unmute.
+_UNMUTE_RETRIES = 3
 
 
 def _run(cmd: list[str], timeout: float = 2.0) -> Optional[str]:
@@ -80,6 +88,20 @@ def _endpoint_name(device) -> str:
         return "?"
 
 
+def _get_level(volume) -> Optional[float]:
+    """Master volume (0.0-1.0) of an endpoint, or None if unreadable."""
+    try:
+        return float(volume.GetMasterVolumeLevelScalar())
+    except Exception:
+        logger.debug("Could not read output volume level", exc_info=True)
+        return None
+
+
+def _level_matches(volume, level: float) -> bool:
+    current = _get_level(volume)
+    return current is None or abs(current - level) < 0.01
+
+
 class OutputMuter:
     """Mutes and restores the system's default audio output device.
 
@@ -97,6 +119,14 @@ class OutputMuter:
         # None = not currently muted by us. Otherwise the mute state we found
         # before muting, to be restored on unmute().
         self._previous: Optional[bool] = None
+        # Windows: the master volume level found before muting, restored on
+        # unmute (some headsets report a mute back as volume 0).
+        self._saved_level: Optional[float] = None
+        # monotonic time of our last unmute write, to tell a device that
+        # re-muted itself from a mute the user chose.
+        self._last_unmute_at: Optional[float] = None
+        # Seconds to wait before checking that a Windows unmute stuck.
+        self._verify_delay = 0.5
         # Serializes backend calls and access to _previous.
         self._lock = threading.Lock()
         self._queue: "queue.Queue[bool]" = queue.Queue()
@@ -150,6 +180,16 @@ class OutputMuter:
         if previous is None:
             logger.warning("System audio output muting is unavailable on this system")
             return
+        if (
+            previous
+            and self._last_unmute_at is not None
+            and time.monotonic() - self._last_unmute_at < _REMUTE_WINDOW
+        ):
+            logger.warning(
+                "device re-muted itself after our unmute; "
+                "treating previous state as unmuted"
+            )
+            previous = False
         self._previous = previous
         logger.info("Muted system audio output (was muted=%s)", previous)
 
@@ -172,6 +212,7 @@ class OutputMuter:
             logger.warning("Could not restore system audio output; will retry")
             return
         self._previous = None
+        self._last_unmute_at = time.monotonic()
         logger.info("Restored system audio output")
 
     # --- Platform backends ------------------------------------------------
@@ -206,7 +247,11 @@ class OutputMuter:
             speakers = AudioUtilities.GetSpeakers()
             volume = _endpoint_volume(speakers)
             previous = bool(volume.GetMute())
-            volume.SetMute(1 if muted else 0, None)
+            if muted:
+                self._saved_level = _get_level(volume)
+                volume.SetMute(1, None)
+            else:
+                self._unmute_windows(volume)
             # Name the endpoint we acted on: muting the default render device
             # does nothing audible if playback is routed somewhere else, and
             # that is otherwise invisible in a bug report.
@@ -221,6 +266,32 @@ class OutputMuter:
         finally:
             if initialized:
                 comtypes.CoUninitialize()
+
+    def _unmute_windows(self, volume) -> None:
+        """Unmute, restore the saved level, and verify it stuck.
+
+        Some USB headsets (seen on a Yealink WH66) flip back to muted, or
+        report the mute as volume 0, after a fast mute->unmute. Runs on the
+        muter worker thread, so the waits never block the hotkey or the UI.
+        """
+        level = self._saved_level
+        self._saved_level = None
+        for attempt in range(_UNMUTE_RETRIES + 1):
+            if attempt:
+                logger.info(
+                    "Output device did not stay unmuted; retry %d/%d",
+                    attempt, _UNMUTE_RETRIES,
+                )
+            volume.SetMute(0, None)
+            if level is not None and not _level_matches(volume, level):
+                volume.SetMasterVolumeLevelScalar(level, None)
+            time.sleep(self._verify_delay)
+            if not volume.GetMute() and (level is None or _level_matches(volume, level)):
+                return
+        logger.warning(
+            "Output device is still muted or at the wrong volume after %d "
+            "unmute retries", _UNMUTE_RETRIES,
+        )
 
     def _set_muted_macos(self, muted: bool) -> Optional[bool]:
         out = _run(["osascript", "-e", "output muted of (get volume settings)"])

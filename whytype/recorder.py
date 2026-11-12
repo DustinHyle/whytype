@@ -29,6 +29,8 @@ def list_input_devices() -> list[str]:
 class AudioRecorder:
     """Records audio from the default input device into a NumPy array."""
 
+    _STOP_TIMEOUT = 2.0
+
     def __init__(
         self,
         samplerate: int = 16000,
@@ -48,6 +50,9 @@ class AudioRecorder:
         # the on-screen recording indicator to show a live input level.
         self._level = 0.0
         self._stream: Optional[sd.InputStream] = None
+        # Bumped on every start(); callbacks from an older stream (one that
+        # was abandoned because it would not stop) are ignored.
+        self._generation = 0
         self._lock = threading.Lock()
 
     def set_input_device(self, device: Optional[str]) -> None:
@@ -91,6 +96,8 @@ class AudioRecorder:
             self._frame_count = 0
             self._level = 0.0
             self._capped = False
+            self._generation += 1
+            generation = self._generation
             try:
                 # Log which input device is actually being used, to diagnose
                 # "no audio / wrong mic" problems.
@@ -108,7 +115,7 @@ class AudioRecorder:
                     channels=1,
                     dtype=np.float32,
                     device=device_index,
-                    callback=self._callback,
+                    callback=lambda *args: self._callback(generation, *args),
                 )
                 self._stream.start()
             except Exception:
@@ -116,9 +123,13 @@ class AudioRecorder:
                 self._stream = None
                 raise
 
-    def _callback(self, indata: np.ndarray, frames: int, time_info, status) -> None:
+    def _callback(
+        self, generation: int, indata: np.ndarray, frames: int, time_info, status
+    ) -> None:
         peak = float(np.max(np.abs(indata))) if frames else 0.0
         with self._lock:
+            if generation != self._generation:
+                return
             self._level = peak
             if self._recording is None or self._capped:
                 return
@@ -143,11 +154,26 @@ class AudioRecorder:
             self._level = 0.0
 
         if stream is not None:
-            try:
-                stream.stop()
-                stream.close()
-            except Exception:
-                pass
+            # Stopping can hang inside Core Audio when another app (e.g. a
+            # meeting recorder) holds or reconfigures the device. stop() runs
+            # on the GUI thread, so a hang froze the app "recording" until it
+            # was force quit. Give up on the stream after a timeout instead.
+            def _close() -> None:
+                try:
+                    stream.stop()
+                    stream.close()
+                except Exception:
+                    pass
+
+            closer = threading.Thread(target=_close, name="whytype-mic-close", daemon=True)
+            closer.start()
+            closer.join(self._STOP_TIMEOUT)
+            if closer.is_alive():
+                logger.warning(
+                    "Microphone stream did not stop within %.0fs (another app "
+                    "may be using the audio device); abandoning it",
+                    self._STOP_TIMEOUT,
+                )
 
         if chunks:
             return np.concatenate(chunks, axis=0).flatten()

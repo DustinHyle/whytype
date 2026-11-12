@@ -75,6 +75,96 @@ def _patch_pynput_macos15() -> None:
 _patch_pynput_macos15()
 
 
+def _patch_pynput_macos_tap_reenable() -> None:
+    """Re-enable pynput's event tap when macOS disables it.
+
+    macOS disables an event tap whose callback is too slow (e.g. while the
+    machine is busy — another app recording and transcribing a meeting) and
+    then sends a kCGEventTapDisabledByTimeout event. pynput never handles it:
+    the tap stays off, so the hotkey stops working until the app is
+    restarted, and a release lost mid-hold leaves the app recording.
+    """
+    if sys.platform != "darwin":
+        return
+    try:
+        import Quartz
+        from pynput._util import darwin as _pd
+
+        disabled = {
+            Quartz.kCGEventTapDisabledByTimeout,
+            Quartz.kCGEventTapDisabledByUserInput,
+        }
+        _orig_create = _pd.ListenerMixin._create_event_tap
+        _orig_handler = _pd.ListenerMixin._handler
+
+        def _create_event_tap(self):
+            tap = _orig_create(self)
+            self._whytype_tap = tap
+            return tap
+
+        def _handler(self, proxy, event_type, event, refcon):
+            if event_type in disabled:
+                tap = getattr(self, "_whytype_tap", None)
+                if tap is not None:
+                    Quartz.CGEventTapEnable(tap, True)
+                logger.warning("macOS disabled the keyboard event tap; re-enabled it")
+                return event
+            return _orig_handler(self, proxy, event_type, event, refcon)
+
+        _pd.ListenerMixin._create_event_tap = _create_event_tap
+        _pd.ListenerMixin._handler = _handler
+        logger.debug("Applied pynput macOS event-tap re-enable patch")
+    except Exception:
+        logger.debug("Could not apply pynput event-tap patch (non-fatal)", exc_info=True)
+
+
+_patch_pynput_macos_tap_reenable()
+
+
+# Set once the OS has reported any key as physically down. Until then a "key
+# is up" answer is not trusted, so a key-state API that silently returns
+# nothing (e.g. a missing permission) can never break the hotkey.
+_KEY_STATE_TRUSTED = False
+
+
+def _os_key_down(vk: int) -> Optional[bool]:
+    """Ask the OS whether a virtual key is physically down. None = unknown."""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+
+            return bool(ctypes.windll.user32.GetAsyncKeyState(vk) & 0x8000)
+        if sys.platform == "darwin":
+            import Quartz
+
+            return bool(Quartz.CGEventSourceKeyState(
+                Quartz.kCGEventSourceStateCombinedSessionState, vk
+            ))
+    except Exception:
+        logger.debug("Could not read key state", exc_info=True)
+    return None
+
+
+def _physically_down(key) -> Optional[bool]:
+    """Whether a pynput key is physically held, or None if that is unknown.
+
+    Windows does not deliver key releases to the hook that happen on the lock
+    screen, a UAC prompt, Ctrl+Alt+Del or during sleep, and macOS loses them
+    while the event tap is disabled. The live keyboard state is the truth.
+    """
+    global _KEY_STATE_TRUSTED
+    value = getattr(key, "value", key)  # Key enum member -> its KeyCode
+    vk = getattr(value, "vk", None)
+    if vk is None:
+        return None
+    down = _os_key_down(vk)
+    if down:
+        _KEY_STATE_TRUSTED = True
+    if down is False and not _KEY_STATE_TRUSTED:
+        return None
+    return down
+
+
 def _set_macos_app_name() -> None:
     """Show "Why Type" (not "Python") in the macOS menu bar and Dock tooltip.
 
@@ -338,6 +428,7 @@ class Signaler(QObject):
 
     start_recording = Signal()
     stop_recording = Signal()
+    cancel_recording = Signal()
     transcribe_done = Signal(str)
     transcribe_failed = Signal(str)
     typing_done = Signal()
@@ -376,6 +467,7 @@ class WhyTypeApp:
         self.signaler = Signaler()
         self.signaler.start_recording.connect(self._on_start_recording)
         self.signaler.stop_recording.connect(self._on_stop_recording)
+        self.signaler.cancel_recording.connect(self._on_cancel_recording)
         self.signaler.transcribe_done.connect(self._on_transcribe_done)
         self.signaler.transcribe_failed.connect(self._on_transcribe_failed)
         self.signaler.typing_done.connect(self._on_typing_done)
@@ -390,9 +482,23 @@ class WhyTypeApp:
         # finished. _state is read from the listener thread, so a quick tap can
         # otherwise have its stop dropped, leaving the app recording forever.
         self._stop_pending = False
+        # Same latch for a cancel (shortcut used in another key combination).
+        self._cancel_pending = False
 
         self._muter = OutputMuter() if OutputMuter is not None else None
         self._indicator = None
+
+        QTimer = _QT_CLASSES["QTimer"]
+        # The mute waits mute_delay_ms so that quick taps and accidental
+        # triggers (Ctrl+Win+Left etc.) never touch the output device.
+        self._mute_timer = QTimer()
+        self._mute_timer.setSingleShot(True)
+        self._mute_timer.timeout.connect(self._mute_output)
+        # In hold mode, polls the physical keyboard so a release the listener
+        # never received cannot leave the app recording forever.
+        self._hold_watchdog = QTimer()
+        self._hold_watchdog.setInterval(250)
+        self._hold_watchdog.timeout.connect(self._check_hold_released)
 
         self.tray_icon: Optional[QSystemTrayIcon] = None
         self._tray_menu: Optional[QMenu] = None
@@ -669,12 +775,55 @@ class WhyTypeApp:
                 return True
         return False
 
+    def _prune_released_keys(self, current) -> bool:
+        """Drop keys the OS says are up (their release was never delivered).
+
+        The key being handled is skipped: on Windows the low-level hook runs
+        before the async key state is updated. Returns True if any key was
+        dropped. A no-op where the key state is unknown (Linux).
+        """
+        stale = [
+            k for k in self._pressed_modifiers
+            if k != current and _physically_down(k) is False
+        ]
+        for k in stale:
+            self._pressed_modifiers.discard(k)
+            logger.info("Dropped stuck key %s (its release was never received)", k)
+        return bool(stale)
+
+    def _is_shortcut_key(self, key) -> bool:
+        modifiers, target = _parse_shortcut(self.config.shortcut)
+        if any(key in MODIFIER_KEYS.get(m, set()) for m in modifiers):
+            return True
+        if target is None:
+            return False
+        if target in SPECIAL_KEYS:
+            return key == SPECIAL_KEYS[target]
+        return _key_to_name(key) == target
+
     def _on_key_press(self, key: Key) -> None:
         self._pressed_modifiers.add(key)
+        if (
+            self._prune_released_keys(key)
+            and self._shortcut_triggered
+            and not self._check_shortcut_match()
+        ):
+            # The keys that triggered the shortcut were released unseen.
+            self._shortcut_triggered = False
         if self._shortcut_triggered:
+            if self.config.recording_mode == "hold" and not self._is_shortcut_key(key):
+                # The shortcut is part of another combination (e.g.
+                # Ctrl+Win+Left). _shortcut_triggered stays set so nothing
+                # restarts until the shortcut is released.
+                self._cancel_pending = True
+                self.signaler.cancel_recording.emit()
             return
         if self._check_shortcut_match():
             self._shortcut_triggered = True
+            # Clear latches here, before start is requested, so a release or
+            # cancel that arrives while recording is starting is never lost.
+            self._stop_pending = False
+            self._cancel_pending = False
             mode = self.config.recording_mode
             if mode == "hold":
                 if self._state == "idle":
@@ -688,6 +837,10 @@ class WhyTypeApp:
     def _on_key_release(self, key: Key) -> None:
         self._pressed_modifiers.discard(key)
         if not self._shortcut_triggered:
+            return
+        self._prune_released_keys(key)
+        if not self._is_shortcut_key(key):
+            # E.g. the Left of Ctrl+Win+Left: the shortcut itself is still held.
             return
 
         modifiers, target_key = _parse_shortcut(self.config.shortcut)
@@ -780,10 +933,6 @@ class WhyTypeApp:
             self.signaler.show_settings.emit()
             return
 
-        self._stop_pending = False
-        # Enqueued, not applied inline: the backends are slow enough that
-        # muting here would delay capture and clip the first words spoken.
-        self._mute_output()
         try:
             self.recorder.start()
             self._state = "recording"
@@ -792,9 +941,19 @@ class WhyTypeApp:
             logger.info("Recording started")
         except Exception as e:
             logger.exception("Failed to start recording")
-            self._unmute_output()
             self._show_error(f"Failed to start recording:\n{e}")
             self._state = "idle"
+            return
+
+        # Recording starts at once so the first words are not clipped; the
+        # mute waits until the key has been held a while.
+        if self._muter is not None and self.config.mute_output_while_recording:
+            self._mute_timer.start(self.config.mute_delay_ms)
+        if self.config.recording_mode == "hold":
+            self._hold_watchdog.start()
+
+        if self._cancel_pending:
+            self._on_cancel_recording()
             return
 
         if self._stop_pending:
@@ -806,6 +965,8 @@ class WhyTypeApp:
         if self._state != "recording":
             return
         self._stop_pending = False
+        self._hold_watchdog.stop()
+        self._mute_timer.stop()  # released before the mute: never touch output
         audio = self.recorder.stop()
         self._unmute_output()
         self._state = "transcribing"
@@ -814,6 +975,44 @@ class WhyTypeApp:
         logger.info("Recording stopped, transcribing...")
         thread = threading.Thread(target=self._transcribe, args=(audio,), daemon=True)
         thread.start()
+
+    def _on_cancel_recording(self) -> None:
+        """Abort without transcribing: the shortcut was part of another combo."""
+        if self._state != "recording":
+            return
+        self._cancel_pending = False
+        self._stop_pending = False
+        self._hold_watchdog.stop()
+        self._mute_timer.stop()
+        self.recorder.stop()  # audio discarded
+        self._unmute_output()
+        self._state = "idle"
+        self._hide_indicator()
+        self.signaler.status_changed.emit("Ready")
+        logger.info(
+            "Recording cancelled: shortcut used as part of another key combination"
+        )
+
+    def _check_hold_released(self) -> None:
+        """Stop a hold-mode recording whose shortcut is no longer held.
+
+        Backstop for a release the listener never received (lock screen, UAC,
+        sleep, or a disabled macOS event tap). Only acts when the OS reports
+        the key state definitively; on Linux it never does.
+        """
+        if self._state != "recording" or self.config.recording_mode != "hold":
+            self._hold_watchdog.stop()
+            return
+        modifiers, target = _parse_shortcut(self.config.shortcut)
+        groups = [MODIFIER_KEYS.get(m, set()) for m in modifiers]
+        if target in SPECIAL_KEYS:
+            groups.append({SPECIAL_KEYS[target]})
+        for group in groups:
+            if group and {_physically_down(k) for k in group} == {False}:
+                logger.warning("Hotkey release was never received; stopping recording")
+                self._shortcut_triggered = False
+                self._on_stop_recording()
+                return
 
     # Below this peak amplitude the recording is effectively silent. Whisper
     # hallucinates filler words ("you", "Thank you.") on silence, so we skip
@@ -1008,6 +1207,7 @@ class WhyTypeApp:
     def quit(self) -> None:
         logger.info("WhyType shutting down")
         self._stop_listener()
+        self._mute_timer.stop()
         self.recorder.stop()
         # Synchronous: the muter's worker is a daemon thread and would be
         # killed by interpreter exit, leaving the speakers muted for good.

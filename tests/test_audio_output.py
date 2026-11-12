@@ -30,6 +30,32 @@ class FakeVolume:
         self.muted = bool(value)
 
 
+class FlakyVolume(FakeVolume):
+    """A headset (Yealink WH66) that re-mutes itself after an unmute.
+
+    It flips back to muted ``flips`` times, reporting the mute as volume 0.
+    """
+
+    def __init__(self, flips: int) -> None:
+        super().__init__()
+        self.level = 0.7
+        self.flips = flips
+
+    def SetMute(self, value, _ctx):  # noqa: N802 (COM naming)
+        if not value and self.flips:
+            self.flips -= 1
+            self.muted = True
+            self.level = 0.0
+            return
+        self.muted = bool(value)
+
+    def GetMasterVolumeLevelScalar(self):  # noqa: N802 (COM naming)
+        return self.level
+
+    def SetMasterVolumeLevelScalar(self, level, _ctx):  # noqa: N802 (COM naming)
+        self.level = level
+
+
 class NewStyleDevice:
     """pycaw >= 20251023: GetSpeakers() returns an AudioDevice wrapper.
 
@@ -106,7 +132,9 @@ class WindowsMuteTest(unittest.TestCase):
         p = mock.patch.object(ao.sys, "platform", "win32")
         p.start()
         self.addCleanup(p.stop)
-        return ao.OutputMuter()
+        muter = ao.OutputMuter()
+        muter._verify_delay = 0
+        return muter
 
     def test_new_style_device_mutes_and_restores(self):
         device = NewStyleDevice()
@@ -141,6 +169,38 @@ class WindowsMuteTest(unittest.TestCase):
             device.EndpointVolume.muted,
             "a user who was already muted must stay muted",
         )
+
+
+    def _flaky_muter(self, flips):
+        device = NewStyleDevice()
+        device.EndpointVolume = FlakyVolume(flips)
+        self._install_pycaw_stub(device)
+        return self._muter(), device.EndpointVolume
+
+    def test_unmute_retries_until_device_stays_unmuted(self):
+        muter, volume = self._flaky_muter(flips=1)
+        muter._mute_locked()
+        muter._unmute_locked()
+        self.assertFalse(volume.muted)
+        self.assertEqual(volume.level, 0.7, "volume level was not restored")
+
+    def test_self_remute_is_not_mistaken_for_user_mute(self):
+        muter, volume = self._flaky_muter(flips=0)
+        muter._mute_locked()
+        muter._unmute_locked()
+        volume.muted = True  # the device re-muted itself after we unmuted
+        muter._mute_locked()
+        self.assertIs(muter._previous, False)
+        muter._unmute_locked()
+        self.assertFalse(volume.muted)
+
+    def test_user_mute_before_any_activity_is_respected(self):
+        muter, volume = self._flaky_muter(flips=0)
+        volume.muted = True
+        muter._mute_locked()
+        self.assertIs(muter._previous, True)
+        muter._unmute_locked()
+        self.assertTrue(volume.muted)
 
 
 class MuterQueueTest(unittest.TestCase):

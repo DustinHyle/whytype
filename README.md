@@ -175,7 +175,7 @@ Open **Settings** from the tray menu to configure:
 |---------|-------------|
 | Shortcut | Capture a new global keyboard shortcut |
 | Recording mode | Hold or Toggle |
-| Mute system audio while recording | Silences playback while you dictate, then restores your previous state |
+| Mute system audio while recording | Silences playback once you have held the shortcut for 0.6 s, then restores your previous state |
 | Show recording indicator on screen | Floating pill with a live microphone level |
 | Microphone | Use the system default, or pick a specific input device |
 | Acceleration | Automatic / GPU / CPU |

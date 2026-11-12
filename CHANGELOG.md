@@ -1,5 +1,19 @@
 # Why Type Changelog
 
+## v1.2.3 - Stuck Recording and Stuck Mute Fixes
+
+### Fixed
+- **macOS: the app could get stuck recording, and the shortcut stopped working until Why Type was force quit.** macOS switches off a keyboard listener that responds too slowly, which can happen when the machine is busy (for example while a meeting recorder such as Granola is running). The keyboard library Why Type uses never switched it back on. After that the shortcut did nothing, and if it happened while you were holding the shortcut, the release was never seen and recording never stopped. Why Type now switches the listener back on straight away.
+- **A missed key release can no longer leave a key "held" forever.** Windows does not report key releases that happen on the lock screen, at a UAC prompt, at Ctrl+Alt+Del or during sleep. After one missed Win release, pressing **Ctrl on its own** started a recording and muted the speakers. On Windows and macOS, Why Type now checks the keyboard's real state before it matches the shortcut. While you hold the shortcut, it also checks every 250 ms that it is still held, and stops the recording if you have let go.
+- **Windows shortcuts that include Ctrl+Win no longer start a dictation.** If you press another key while holding the shortcut (Ctrl+Win+Left/Right, Ctrl+Win+D and so on), the recording is cancelled. The audio is thrown away, nothing is typed, and your sound is restored. This applies on every platform in hold mode, so Ctrl+Cmd+Space and similar shortcuts on macOS are covered too.
+- **Releasing an unrelated key no longer counts as releasing the shortcut.**
+- **A release during the first recording after launch (while the model was still loading) could be lost**, which left the app recording.
+- **Windows: some USB headsets (seen on a Yealink WH66) were left muted with the volume at 0.** After a quick mute and unmute, the device muted itself again. Why Type then took that as your own choice and kept it muted. Now Why Type saves the volume level before muting, puts it back afterwards, and checks that the unmute held, retrying up to 3 times. If the device reads muted within 10 seconds of Why Type's own unmute, Why Type no longer treats that as your choice. A mute you set yourself is still respected.
+- **A microphone that would not stop no longer freezes the app.** If another app holds the audio device and stopping the microphone hangs, Why Type gives up on it after 2 seconds instead of freezing.
+
+### Changed
+- **Muting now waits until you have held the shortcut for 0.6 s.** Recording still starts immediately, so your first words are not cut off. Quick taps and accidental triggers never touch your speakers. To change the delay, set `mute_delay_ms` in `settings.json`.
+
 ## v1.2.2 - Transcription Fix (Important)
 
 ### Fixed

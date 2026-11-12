@@ -30,6 +30,7 @@ DEFAULT_CONFIG = {
     "device": "auto",  # auto | gpu | cpu
     "input_device": "",  # "" = OS default microphone; else device name
     "mute_output_while_recording": True,
+    "mute_delay_ms": 600,  # hold this long before the output is muted
     "show_recording_indicator": True,
 }
 
@@ -130,6 +131,14 @@ class Config:
     @mute_output_while_recording.setter
     def mute_output_while_recording(self, value: bool) -> None:
         self._data["mute_output_while_recording"] = bool(value)
+
+    @property
+    def mute_delay_ms(self) -> int:
+        """Delay between the start of a recording and muting the output."""
+        try:
+            return max(0, int(self._data.get("mute_delay_ms", DEFAULT_CONFIG["mute_delay_ms"])))
+        except (TypeError, ValueError):
+            return DEFAULT_CONFIG["mute_delay_ms"]
 
     @property
     def show_recording_indicator(self) -> bool:
